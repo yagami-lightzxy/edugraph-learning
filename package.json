@@ -1,6 +1,6 @@
 {
   "name": "edugraph-learning",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "EduGraph AI 学习模式 · DSH 插件：资料解析（含电路图渲染）、知识图谱、学习计划、练习批改、间隔复习与面板内 AI 导师",
   "repository": {
     "type": "git",
@@ -47,7 +47,7 @@
   ],
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "test": "node --test test/server.test.mjs test/parse.test.mjs test/fsrs.test.mjs test/search.test.mjs",
+    "test": "node --test test/server.test.mjs test/parse.test.mjs test/fsrs.test.mjs test/search.test.mjs test/pack.test.mjs",
     "test:server": "node --test test/server.test.mjs"
   },
   "dependencies": {

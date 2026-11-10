@@ -17,8 +17,9 @@ export function isEmbedMode(): boolean {
 export function chatFrameUrl(sessionId?: string | null): string {
   if (typeof window === 'undefined') return '#'
   const location = window.location
+  // 保留查询串：DSH 桌面端用 ?token=... 鉴权，丢掉它 iframe 会 401、一直转圈。
   const base = location.origin && location.origin !== 'null'
-    ? location.origin + location.pathname
+    ? location.origin + location.pathname + location.search
     : location.href.split('#')[0]
   return base + '#' + EMBED_HASH + (sessionId ? '|' + encodeURIComponent(sessionId) : '')
 }

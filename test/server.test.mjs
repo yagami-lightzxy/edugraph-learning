@@ -297,6 +297,37 @@ describe('学习闭环（真实存储）', () => {
     assert.equal(answer.body.ok, true)
     const missing = await run('/courses/not-exist/overview')
     assert.equal(missing.status, 404)
+
+    // 外部 AI 课程包：导出 → 预览 → 导入 → 导入题目进入练习
+    const exported = await run(`/courses/${courseId}/pack`)
+    assert.equal(exported.body.ok, true)
+    assert.equal(exported.body.pack.format, 'edugraph-course-pack')
+    assert.ok(exported.body.prompt.includes('只输出 JSON'))
+
+    const outerPack = {
+      format: 'edugraph-course-pack',
+      version: 1,
+      chapters: [{
+        title: '外部 AI 章节',
+        summary: '',
+        concepts: [{ name: '外部测试概念', definition: '由外部模型生成的测试概念，用来验证导入链路。' }],
+      }],
+      questions: [{ conceptName: '外部测试概念', type: 'judge', stem: '外部测试概念是导入进来的。', answer: '正确' }],
+    }
+    const preview = await run(`/courses/${courseId}/pack/preview`, { method: 'POST', body: JSON.stringify({ pack: outerPack }) })
+    assert.equal(preview.body.ok, true)
+    assert.equal(preview.body.counts.conceptsAdded, 1)
+    assert.equal(preview.body.counts.questionsAdded, 1)
+    const imported = await run(`/courses/${courseId}/pack`, { method: 'POST', body: JSON.stringify({ pack: outerPack }) })
+    assert.equal(imported.body.ok, true)
+    assert.equal(imported.body.counts.chaptersAdded, 1)
+    const after = await store.getCourse(courseId)
+    const extra = after.concepts.find((concept) => concept.name === '外部测试概念')
+    assert.ok(extra)
+    assert.equal(after.questions.find((question) => question.conceptId === extra.id).origin, 'external-ai')
+    const externalQuiz = await service.createQuiz(courseId, { conceptIds: [extra.id], count: 1 })
+    assert.equal(externalQuiz.questions.length, 1)
+    assert.equal(externalQuiz.questions[0].type, 'judge')
   })
 
   it('删除资料后会重新分析', async () => {
@@ -315,7 +346,7 @@ describe('Agent 工具', () => {
       'upsert_concepts', 'upsert_relations', 'get_student_profile', 'save_student_profile',
       'create_study_plan', 'update_study_plan', 'create_quiz', 'grade_answer',
       'record_learning_event', 'get_learning_state', 'get_due_reviews', 'get_course_overview',
-      'get_page_image', 'list_document_images',
+      'get_page_image', 'list_document_images', 'export_course_pack', 'import_course_pack',
     ]
     assert.deepEqual(definitions.map((tool) => tool.name).sort(), expected.sort())
     for (const definition of definitions) {

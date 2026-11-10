@@ -16,6 +16,7 @@ import { LessonView, QuizView, MistakesView, ReviewView } from './views/Practice
 import { GraphView } from './views/Graph'
 import { SettingsView } from './views/Settings'
 import { ChatDock } from './views/Chat'
+import { PackModal } from './views/Pack'
 import { getChatSessionId, subscribeChatSession, trackChatSession } from './session'
 import { installChatEmbed } from './embed'
 import { newAskId, setTutorSender, type TutorAsk } from './tutor'
@@ -85,6 +86,7 @@ export function LearningPanel({ closePanel, chatEnabled = true }: PanelProps) {
   const [dueCount, setDueCount] = useState(0)
   const [booting, setBooting] = useState(true)
   const [chatOpen, setChatOpen] = useState(readChatOpen)
+  const [packOpen, setPackOpen] = useState(false)
   const [askRequest, setAskRequest] = useState<TutorAsk | null>(null)
   const [quizRequest, setQuizRequest] = useState<QuizRequest>({ mode: 'practice' })
   const toastTimer = useRef<number | null>(null)
@@ -370,6 +372,11 @@ export function LearningPanel({ closePanel, chatEnabled = true }: PanelProps) {
           </div>
           <div className="eg-top-actions">
             {courseId ? (
+              <button type="button" className="eg-btn ghost sm eg-pack-open" title="用 ChatGPT / Claude 生成课程内容" aria-label="用其他 AI 生成课程内容" onClick={() => setPackOpen(true)}>
+                <Icon name="spark" size={14} /><span className="eg-hide-sm">AI 内容</span>
+              </button>
+            ) : null}
+            {courseId ? (
               <button type="button" className="eg-icon-btn sm eg-settings-compact" title="学习设置" onClick={() => setView('settings')}>
                 <Icon name="settings" size={14} />
               </button>
@@ -449,6 +456,24 @@ export function LearningPanel({ closePanel, chatEnabled = true }: PanelProps) {
       ) : null}
       </div>
 
+      {showChat && !chatOpen ? (
+        <button type="button" className="eg-chat-fab" onClick={() => setChat(true)} title="打开 AI 导师" aria-label="打开 AI 导师">
+          <Icon name="chat" size={15} /> AI 导师
+        </button>
+      ) : null}
+      {courseId && packOpen ? (
+        <PackModal
+          open={packOpen}
+          courseId={courseId}
+          courseName={course?.name ?? ''}
+          onClose={() => setPackOpen(false)}
+          onImported={() => {
+            refresh()
+            void api.listCourses().then((data) => setCatalog(data.courses)).catch(() => undefined)
+          }}
+          notify={notify}
+        />
+      ) : null}
       {toast ? <div className="eg-toast" role="status">{toast}</div> : null}
     </div>
   )

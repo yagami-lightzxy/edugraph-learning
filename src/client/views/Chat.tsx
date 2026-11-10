@@ -113,7 +113,7 @@ export function ChatDock({ open, sessionId, askRequest, onAskDone, onNotify, onC
       <div className="eg-chat-body">
         <div className="eg-chat-frame-wrap">
           <iframe
-            key={nonce}
+            key={`${nonce}:${sessionId ?? 'none'}`}
             ref={frameRef}
             className="eg-chat-frame"
             title="AI 导师对话"

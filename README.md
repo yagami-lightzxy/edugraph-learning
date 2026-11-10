@@ -12,6 +12,10 @@
 |---|---|
 | ![讲解](docs/screenshot-lesson.png) | ![练习](docs/screenshot-quiz-answer.png) |
 
+| 外部 AI 课程包（导出 / 预览 / 导入） |
+|---|
+| ![外部 AI 课程包](docs/screenshot-ai-pack.png) |
+
 | 图示（PDF 电路图现渲染） | 课程库首屏 |
 |---|---|
 | ![图示](docs/screenshot-figure.png) | ![课程库](docs/screenshot-library.png) |
@@ -20,7 +24,7 @@
 
 | 层 | 技术 | 用来干什么 |
 |---|---|---|
-| 宿主插件 | Node ESM + Cordis（`export const name/inject/apply`） | 注册 HTTP 路由与 18 个 Agent 工具 |
+| 宿主插件 | Node ESM + Cordis（`export const name/inject/apply`） | 注册 HTTP 路由与 20 个 Agent 工具 |
 | 浏览器插件 | React 18 + TypeScript（TSX）+ esbuild | 学习面板 UI，编译成 `window.__ModuleLoader__` 惰性 CJS bundle |
 | 面板接入 | `ctx.slots.register({name:'main', key:'learning'})` + `ctx.layout.selectPanel` | 与 DSH 原生会话一键切换 |
 | 面板内对话 | 同源 iframe 嵌入原生会话 + `ctx.layout.selectPanel(null)` | 复用模型、工具、权限、审批与历史，不另写聊天 |
@@ -33,7 +37,7 @@
 | 复习 | 自写 FSRS-5 | 计算每个知识点的下次复习时间 |
 | 出题判分 | 自写（定义句挖空、同章干扰项、关键点覆盖） | 选择题/填空/判断/简答与批改 |
 | 图谱可视化 | 自绘 SVG + 自写受力布局 | 概念关系图、章节焦点、悬停高亮、缩放平移 |
-| 验证 | `node:test`（56 项）、Playwright、DSH 自带 schema 校验器 | 单测、真实浏览器 12 步验收、工具 schema 校验 |
+| 验证 | `node:test`（64 项）、Playwright、DSH 自带 schema 校验器 | 单测、真实浏览器 12 步验收、工具 schema 校验 |
 
 ## 图示与电路图怎么解决
 
@@ -65,6 +69,18 @@
 实现上，嵌入实例只做四件事：注入紧凑样式、强制显示会话、对齐当前课程对应的会话、接收「问导师」的上下文提问；它不注册学习面板，避免递归。面板本身用容器查询按 DSH 主区域的实际宽度收放左侧栏，所以原生侧栏展开时也不会把中间内容挤扁。
 
 > 取舍：用 iframe 是当前 DSH 插件 API 下复用原生会话最稳的做法——自写聊天会丢掉工具调用、审批和队列，而会话渲染组件没有对插件暴露。代价是首次打开会多加载一个客户端实例；对话收起后实例保留，二次打开很快。等 DSH 提供嵌入式会话组件，这一层可以替换。
+
+## 用其他 AI 生成内容（v1.3）
+
+外部模型不需要接进插件，走课程包就行：
+
+1. 打开一门课，点顶部「AI 内容」。
+2. 在「复制给 AI」里点「复制提示词」，整段粘给 ChatGPT / Claude / Gemini；提示词里已经包含当前课程结构和题目。
+3. 让它按格式补概念、讲解和题目，只返回 JSON（支持 ```json 代码块）。
+4. 回到「导入 AI 结果」，粘贴 JSON；先点「预览校验」看新增/跳过多少，再确认导入。
+5. 同名概念会合并，已有定义默认不覆盖（可以勾选覆盖）；导入的题目会进入练习，新增概念会进图谱和讲解。**计划字段只给外部 AI 作上下文，导入不会改现有计划**；需要时去计划页重新生成。
+
+这条路不需要 API key，GPT 网页版就能用。DSH 里的 Agent 也可以直接调 `export_course_pack` / `import_course_pack`，不用复制粘贴。导入只追加/补空，不删除已有内容；格式、引用、选项答案和长度都会在服务端校验，坏了会被拒绝，不会写进课程。
 
 ## 和同类学习产品有什么不同
 
@@ -115,7 +131,7 @@ node <dsh>/lib/bin.js --profile web --patch dev-patch.example.yml --port 3900 --
 
 界面上的「现在做这个」永远只给一个下一步，不用自己想到底该干嘛。
 
-## 给 Agent 的能力（18 个工具）
+## 给 Agent 的能力（20 个工具）
 
 | 分类 | 工具 |
 |---|---|
@@ -126,10 +142,11 @@ node <dsh>/lib/bin.js --profile web --patch dev-patch.example.yml --port 3900 --
 | 计划 | `create_study_plan`、`update_study_plan` |
 | 练习 | `create_quiz`、`grade_answer` |
 | 进度 | `record_learning_event`、`get_learning_state`、`get_due_reviews`、`get_course_overview` |
+| 外部 AI | `export_course_pack`、`import_course_pack` |
 
 工具描述全部用大白话写成，模型照着做就像个正常家教；`courseId` 可省略，会自动用界面上打开的那门课。
 
-本地 HTTP 接口与面板共用：`/plugins/edugraph-learning/api` → `/courses`、`/overview|graph|plan|documents|lesson|quiz|mistakes|reviews|search`、`/documents/:id/pages/:n/image`、`/media`、`/state`、`/profile`、`/health`。
+本地 HTTP 接口与面板共用：`/plugins/edugraph-learning/api` → `/courses`、`/overview|graph|plan|documents|lesson|quiz|mistakes|reviews|search`、`/pack|pack/preview`、`/documents/:id/pages/:n/image`、`/media`、`/state`、`/profile`、`/health`。
 
 ## 数据
 
@@ -150,11 +167,11 @@ $DSH_HOME/storages/edugraph-learning/
 ## 开发
 
 ```powershell
-npm test                       # 56 项；真实 PDF 用例需设置 EDUGRAPH_REAL_PDF
+npm test                       # 64 项；真实 PDF 用例需设置 EDUGRAPH_REAL_PDF
 npm run build                  # 重新生成 lib/client.js
 node scripts/e2e-real.mjs "<一份真实 PDF>"   # 真实课程全链路
 node scripts/verify-bundle.mjs               # 客户端 bundle 合同
-node scripts/verify-tools.mjs <dsh-tools 的 json-schema.js>   # 用 DSH 校验器验 18 个工具
+node scripts/verify-tools.mjs <dsh-tools 的 json-schema.js>   # 用 DSH 校验器验 20 个工具
 ```
 
 ```
@@ -177,6 +194,7 @@ docs/          工程说明与截图
 
 ## 更新记录
 
+- **v1.3.0**：外部 AI 课程包——顶部「AI 内容」把课程导出成 JSON + 提示词，交给 ChatGPT/Claude 生成，再粘回校验合并；导入的概念/题目进入图谱、讲解和练习；右侧 iframe 在会话 id 变化时强制重载，并保留父页面查询串，避免先挂到空会话后不跟随。
 - **v1.2.0**：学习面板改成三栏（课程导航 / 学习内容 / AI 导师），首屏、导航、卡片与练习反馈统一视觉；面板内 AI 导师复用当前 DSH 原生会话，可收起或展开；讲解/错题/图谱/概览支持带上下文「问导师」自动发送；修复反向选择题被当成简答题判分的问题。
 - **v1.1.1**：PDF 文档缓存、图片查看器翻页、Office 图片画廊、安装自检脚本。
 - **v1.1.0**：学习面板、电路图渲染、知识图谱与间隔复习。

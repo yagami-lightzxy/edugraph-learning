@@ -71,6 +71,17 @@ export type LessonData = {
   recallPrompt: string
   dueCount: number
 }
+export type PackStats = {
+  chapters: number; concepts: number; questions: number; relations: number; bytes: number
+}
+export type PackCounts = {
+  chaptersAdded: number; conceptsAdded: number; conceptsUpdated: number
+  questionsAdded: number; questionsSkipped: number; relationsAdded: number; relationsSkipped: number
+}
+export type PackPreview = {
+  ok: boolean; preview?: boolean; counts: PackCounts; warnings: string[]
+  stats: PackStats; totals: { chapters: number; concepts: number; questions: number; relations: number }
+}
 export type GradeResult = {
   grade: { score: number; correct: boolean; errorTags: string[]; explanation: string; expected: string; correctAnswer: string; options: string[] }
   attempt: { id: string; score: number; correct: boolean }
@@ -121,6 +132,11 @@ export const api = {
   getCourse: (id: string) => request<any>(`/courses/${id}`),
   updateCourse: (id: string, body: any) => request<any>(`/courses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteCourse: (id: string) => request<any>(`/courses/${id}`, { method: 'DELETE' }),
+  coursePack: (id: string) => request<{ ok: boolean; pack: any; prompt: string; stats: PackStats }>(`/courses/${id}/pack`),
+  previewPack: (id: string, pack: any, overwriteDefinitions = false) =>
+    request<PackPreview>(`/courses/${id}/pack/preview`, { method: 'POST', body: JSON.stringify({ pack, overwriteDefinitions }) }),
+  importPack: (id: string, pack: any, overwriteDefinitions = false) =>
+    request<PackPreview & { course: Course }>(`/courses/${id}/pack`, { method: 'POST', body: JSON.stringify({ pack, overwriteDefinitions }) }),
   overview: (id: string) => request<{ ok: boolean } & Overview>(`/courses/${id}/overview`),
   graph: (id: string) => request<{ ok: boolean } & GraphData>(`/courses/${id}/graph`),
   documents: (id: string) => request<{ ok: boolean; documents: DocumentItem[] }>(`/courses/${id}/documents`),

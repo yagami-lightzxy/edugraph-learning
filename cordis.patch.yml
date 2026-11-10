@@ -1,0 +1,6 @@
+# EduGraph AI 学习模式：把插件与学习面板插入 DSH 的插件树。
+# 服务端（lib/index.js）注册 HTTP 接口与 Agent 工具；客户端（lib/client.js）注册
+# 「学习」主面板、侧栏入口与顶部栏开关。删除本文件中的条目即可停用。
+- insert:
+    - id: edugraph-learning
+      name: 'edugraph-learning'

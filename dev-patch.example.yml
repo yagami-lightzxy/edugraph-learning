@@ -1,0 +1,5 @@
+# 临时联调用的 patch：把插件以绝对路径插进默认 web profile，不改用户 profile。
+# 复制为 dev-patch.yml 并改成你自己的插件目录即可。
+- insert:
+    - id: edugraph-learning
+      name: 'D:/slaern/edugraph-learning/lib/index.js'

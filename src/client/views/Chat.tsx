@@ -7,10 +7,13 @@ import type { TutorAsk } from '../tutor'
 
 type ChatStatus = 'loading' | 'ready' | 'slow' | 'error'
 
-export function ChatDock({ open, sessionId, sessionBlank, renderFactorySlot, askRequest, onAskDone, onNotify, onClose, onExpand }: {
+export function ChatDock({ open, sessionId, sessionBlank, tutorReady, tutorError, onRetryTutor, renderFactorySlot, askRequest, onAskDone, onNotify, onClose, onExpand }: {
   open: boolean
   sessionId: string | null
   sessionBlank?: boolean
+  tutorReady?: boolean
+  tutorError?: string | null
+  onRetryTutor?: () => void
   renderFactorySlot?: any
   askRequest: TutorAsk | null
   onAskDone: (id: number) => void
@@ -38,7 +41,8 @@ export function ChatDock({ open, sessionId, sessionBlank, renderFactorySlot, ask
       return null
     }
   }, [renderFactorySlot, sessionBlank])
-  const connected = Boolean(nativeContent) || status === 'ready'
+  const pending = tutorReady === false
+  const connected = !pending && (Boolean(nativeContent) || status === 'ready')
 
   useEffect(() => { if (open) setMounted(true) }, [open])
 
@@ -116,24 +120,31 @@ export function ChatDock({ open, sessionId, sessionBlank, renderFactorySlot, ask
   if (!mounted) return null
 
   return (
-    <aside className="eg-chat" data-state={nativeContent ? 'ready' : status} data-native={nativeContent ? 'true' : 'false'} aria-label="AI 导师">
+    <aside className="eg-chat" data-state={pending ? (tutorError ? 'error' : 'loading') : nativeContent ? 'ready' : status} data-native={!pending && nativeContent ? 'true' : 'false'} aria-label="AI 导师">
       <header className="eg-chat-head">
         <span className="eg-chat-avatar"><Icon name="spark" size={17} /></span>
         <div className="eg-chat-title">
           <b>AI 导师</b>
           <span>
-            <i className="eg-live-dot" data-tone={status === 'error' && !nativeContent ? 'error' : connected ? 'success' : 'warn'} />
-            {nativeContent ? '与当前对话同步' : status === 'ready' ? '与当前对话同步' : status === 'error' ? '连接失败，点刷新重试' : status === 'slow' ? '还在连接对话…' : '正在接入对话…'}
+            <i className="eg-live-dot" data-tone={pending ? (tutorError ? 'error' : 'warn') : status === 'error' && !nativeContent ? 'error' : connected ? 'success' : 'warn'} />
+            {pending ? (tutorError ? '独立导师没打开' : '正在准备独立导师…') : nativeContent ? '独立导师会话' : status === 'ready' ? '已连接' : status === 'error' ? '连接失败，点刷新重试' : status === 'slow' ? '还在连接对话…' : '正在接入对话…'}
           </span>
         </div>
         <div className="eg-chat-actions">
-          {nativeContent ? null : <button type="button" className="eg-icon-btn sm" title="重新加载对话" aria-label="重新加载对话" onClick={reload}><Icon name="refresh" size={14} /></button>}
+          {pending ? null : nativeContent ? null : <button type="button" className="eg-icon-btn sm" title="重新加载对话" aria-label="重新加载对话" onClick={reload}><Icon name="refresh" size={14} /></button>}
           <button type="button" className="eg-icon-btn sm" title="在完整对话中打开" aria-label="在完整对话中打开" onClick={onExpand}><Icon name="panel" size={14} /></button>
           <button type="button" className="eg-icon-btn sm" title="收起导师（对话不中断）" aria-label="收起导师" onClick={onClose}><Icon name="close" size={14} /></button>
         </div>
       </header>
 
-      {nativeContent ? (
+      {pending ? (
+        <div className="eg-chat-preparing">
+          <span className="eg-spinner" />
+          <b>{tutorError ? '独立导师会话没有打开' : '正在准备独立导师会话'}</b>
+          <p>{tutorError ? '这次没有创建成功，点重试再开一次；学习进度不受影响。' : '会新建一条独立 DSH 会话：模型、工具、审批和主界面一样，但不会占用当前主对话。'}</p>
+          {tutorError ? <button type="button" className="eg-btn sm" onClick={onRetryTutor}>重试</button> : null}
+        </div>
+      ) : nativeContent ? (
         <div className="eg-chat-native">{nativeContent}</div>
       ) : (
       <div className="eg-chat-body">
@@ -171,7 +182,7 @@ export function ChatDock({ open, sessionId, sessionBlank, renderFactorySlot, ask
       )}
 
       <footer className="eg-chat-foot">
-        <span className="eg-chat-sync"><i className="eg-live-dot" />{sessionId ? '当前课程与对话已共享' : '先在左侧选一门课'}</span>
+        <span className="eg-chat-sync"><i className="eg-live-dot" />{sessionId ? '当前课程与导师会话已共享' : '先在左侧选一门课'}</span>
         <span className="eg-chat-hint">Enter 发送 · Shift + Enter 换行</span>
       </footer>
     </aside>

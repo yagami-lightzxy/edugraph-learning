@@ -4,7 +4,7 @@
  * 界面分三块：
  *  - 左侧学员导航（课程、学习/练习分组、设置与返回对话）；
  *  - 中间学习内容（原有的课程库、概览、资料、计划、图谱、讲解、练习）；
- *  - 右侧「AI 导师」：同源 iframe 内嵌当前 DSH 原生会话，模型和工具权限不变。
+ *  - 右侧「AI 导师」：学习插件自己的独立 DSH 会话，原生消息/composer/模型/工具，不占用当前主对话。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import css from './styles.css'
@@ -18,6 +18,7 @@ import { SettingsView } from './views/Settings'
 import { ChatDock } from './views/Chat'
 import { PackModal } from './views/Pack'
 import { getChatSessionId, subscribeChatSession, trackChatSession } from './session'
+import { createTutorController } from './tutor-session'
 import { installChatEmbed } from './embed'
 import { newAskId, setTutorSender, type TutorAsk } from './tutor'
 
@@ -68,6 +69,10 @@ export type PanelProps = {
   closePanel?: () => void
   /** iframe 里不显示右侧对话，避免递归。 */
   chatEnabled?: boolean
+  /** 由插件注入：创建/切换到这门课的独立导师会话，返回导师 session id。 */
+  ensureTutor?: (courseId: string, workspaceId?: string) => Promise<string | null>
+  /** 由插件注入：返回学习前的主会话（只在用户明确“返回对话”时用）。 */
+  restoreMain?: () => boolean
 }
 
 function useChatSession(): string | null {
@@ -78,7 +83,7 @@ function useChatSession(): string | null {
 
 /** 学习主面板。 */
 export function LearningPanel(props: PanelProps & Record<string, any>) {
-  const { closePanel, chatEnabled = true, sendChat } = props
+  const { closePanel, chatEnabled = true, sendChat, ensureTutor, restoreMain } = props
   const [catalog, setCatalog] = useState<CourseListItem[]>([])
   const [courseId, setCourseId] = useState<string | null>(null)
   const [view, setView] = useState<ViewKey>('library')
@@ -90,10 +95,15 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
   const [packOpen, setPackOpen] = useState(false)
   const [askRequest, setAskRequest] = useState<TutorAsk | null>(null)
   const [quizRequest, setQuizRequest] = useState<QuizRequest>({ mode: 'practice' })
+  const [tutorReady, setTutorReady] = useState(false)
+  const [tutorError, setTutorError] = useState<string | null>(null)
+  const [tutorAttempt, setTutorAttempt] = useState(0)
   const toastTimer = useRef<number | null>(null)
   const styleRef = useRef<HTMLStyleElement | null>(null)
   const mainRef = useRef<HTMLElement | null>(null)
   const chatSession = useChatSession()
+  const workspaceRef = useRef<string | undefined>(undefined)
+  const workspacesSnapshot = props.useWorkspaces((snapshot: any) => snapshot)
 
   const notify = useCallback((message: string) => {
     setToast(message)
@@ -111,15 +121,30 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
   const askTutor = useCallback((text: string, label?: string) => {
     if (!chatEnabled) return false
     setChat(true)
-    // 原生聊天坞直接走父页面的 conversation 服务；iframe 只作为没有原生 slot 时的兜底。
-    if (typeof sendChat === 'function' && sendChat(text)) {
+    const deliver = (target: string | null) => {
+      // 原生聊天坞直接走导师会话的 conversation 服务；iframe 只作为没有原生 slot 时的兜底。
+      if (typeof sendChat === 'function' && sendChat(text, target ?? undefined)) {
+        notify(label ? `已把「${label}」发给 AI 导师` : '已把问题发给 AI 导师')
+        return true
+      }
+      setAskRequest({ id: newAskId(), text, label })
       notify(label ? `已把「${label}」发给 AI 导师` : '已把问题发给 AI 导师')
       return true
     }
-    setAskRequest({ id: newAskId(), text, label })
-    notify(label ? `已把「${label}」发给 AI 导师` : '已把问题发给 AI 导师')
-    return true
-  }, [chatEnabled, notify, sendChat, setChat])
+    if (courseId && typeof ensureTutor === 'function') {
+      void ensureTutor(courseId, workspaceRef.current).then((target) => {
+        if (!target) {
+          notify('独立导师会话没有打开，稍后再试一次')
+          return
+        }
+        setTutorReady(true)
+        setTutorError(null)
+        deliver(target)
+      }).catch(() => notify('独立导师会话没有打开，稍后再试一次'))
+      return true
+    }
+    return deliver(null)
+  }, [chatEnabled, courseId, ensureTutor, notify, sendChat, setChat])
 
   const clearAsk = useCallback((id: number) => {
     setAskRequest((current) => (current && current.id === id ? null : current))
@@ -207,6 +232,40 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
   const sessionsSnapshot = props.useSessions((snapshot: any) => snapshot)
   const sessionRow = chatSession ? sessionsSnapshot?.byId?.[chatSession] : null
   const sessionBlank = Boolean(sessionRow?.blank)
+  const workspaceRow = useMemo(() => {
+    const items: any[] = Array.isArray(workspacesSnapshot) ? workspacesSnapshot : workspacesSnapshot?.items ?? []
+    const bySession = chatSession
+      ? items.find((workspace) => Array.isArray(workspace?.sessionIds) && workspace.sessionIds.includes(chatSession))
+      : undefined
+    return bySession
+      ?? items.find((workspace) => workspace?.path && workspace.path === sessionRow?.cwd)
+      ?? items[0]
+      ?? null
+  }, [workspacesSnapshot, chatSession, sessionRow?.cwd])
+  useEffect(() => { workspaceRef.current = workspaceRow?.workspaceId ?? undefined }, [workspaceRow])
+  const retryTutor = useCallback(() => setTutorAttempt((value) => value + 1), [])
+
+  // 右侧聊天不绑定当前主对话：进入课程/打开导师时，确保切到这门课自己的 DSH 会话。
+  useEffect(() => {
+    if (!chatEnabled || !chatOpen || !courseId || typeof ensureTutor !== 'function') {
+      setTutorReady(false)
+      setTutorError(null)
+      return undefined
+    }
+    let cancelled = false
+    setTutorReady(false)
+    setTutorError(null)
+    void ensureTutor(courseId, workspaceRef.current).then((target) => {
+      if (cancelled) return
+      setTutorReady(Boolean(target))
+      if (!target) setTutorError('独立导师会话没有打开')
+    }).catch((error: any) => {
+      if (cancelled) return
+      setTutorReady(false)
+      setTutorError(error?.message ?? '独立导师会话没有打开')
+    })
+    return () => { cancelled = true }
+  }, [chatEnabled, chatOpen, courseId, ensureTutor, tutorAttempt, workspaceRow?.workspaceId])
 
   const openCourse = useCallback((id: string) => {
     setCourseId(id)
@@ -226,14 +285,17 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
 
   const leave = useCallback(() => {
     void api.saveState({ enabled: false }).catch(() => undefined)
+    restoreMain?.()
     closePanel?.()
-  }, [closePanel])
+  }, [closePanel, restoreMain])
 
+  // 聊天坞的「在完整对话中打开」指当前导师会话，不恢复主对话。
   const expandChat = useCallback(() => {
     setChat(false)
     setAskRequest(null)
-    leave()
-  }, [leave, setChat])
+    void api.saveState({ enabled: false }).catch(() => undefined)
+    closePanel?.()
+  }, [closePanel, setChat])
 
   const toggleChat = useCallback(() => setChat(!chatOpen), [chatOpen, setChat])
 
@@ -250,7 +312,8 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
   }
 
   const showNav = Boolean(courseId)
-  const showChat = Boolean(chatEnabled)
+  // 没有课程时不渲染右侧坞，避免在课程库把当前主对话误显示成“导师”。
+  const showChat = Boolean(chatEnabled) && Boolean(courseId)
   const dataChat = showChat && chatOpen ? 'true' : 'false'
 
   return (
@@ -457,6 +520,9 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
           open={chatOpen}
           sessionId={chatSession}
           sessionBlank={sessionBlank}
+          tutorReady={tutorReady}
+          tutorError={tutorError}
+          onRetryTutor={retryTutor}
           renderFactorySlot={props.renderFactorySlot}
           askRequest={askRequest}
           onAskDone={clearAsk}
@@ -509,8 +575,8 @@ export function apply(ctx: any) {
     trackChatSession(ctx)
 
     // 原生聊天坞的发送口：不再需要 iframe；上下文「问导师」直接入当前会话。
-    const sendChat = (text: string) => {
-      const id = getChatSessionId()
+    const sendChat = (text: string, targetId?: string) => {
+      const id = targetId || getChatSessionId()
       if (!id) return false
       try {
         const conversation = ctx.sessions?.scope?.(id)?.get?.('conversation')
@@ -526,6 +592,7 @@ export function apply(ctx: any) {
     const slots = ctx.slots ?? ctx.get?.('slots')
     const layout = ctx.layout ?? ctx.get?.('layout')
     if (!slots) { console.warn('[edugraph] no slots service'); return }
+    const tutor = createTutorController(ctx, layout, PANEL_ID)
 
     ctx.effect(
       () => slots.inject('main', () => slots.register({
@@ -535,6 +602,8 @@ export function apply(ctx: any) {
           closePanel: () => { layout?.selectPanel?.(null) },
           chatEnabled: true,
           sendChat,
+          ensureTutor: tutor.ensureTutor,
+          restoreMain: tutor.restoreMain,
         }),
       }, LearningPanel)),
       'edugraph-learning: main panel',

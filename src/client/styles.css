@@ -1022,6 +1022,12 @@ body[data-ds-dark-theme] .eg-app {
 .eg-chat-fab:hover { background: var(--eg-brand-deep); }
 .eg-chat-native { flex: 1; min-height: 0; display: flex; overflow: hidden; }
 .eg-chat-native > * { flex: 1; min-width: 0; min-height: 0; }
+.eg-chat-preparing {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 28px 24px; text-align: center;
+}
+.eg-chat-preparing b { font-size: 14px; color: var(--eg-text); }
+.eg-chat-preparing p { margin: 0; max-width: 250px; font-size: 12px; line-height: 1.65; color: var(--eg-muted); }
 .eg-chat-head {
   flex: none;
   display: flex;

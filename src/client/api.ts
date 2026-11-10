@@ -135,6 +135,8 @@ export const api = {
     return payload as { ok: boolean; document: DocumentItem }
   },
   deleteDocument: (id: string, docId: string) => request<any>(`/courses/${id}/documents/${docId}`, { method: 'DELETE' }),
+  documentMedia: (id: string, docId: string) =>
+    request<{ ok: boolean; media: { index: number; name: string; ext: string; bytes: number }[]; count: number }>(`/courses/${id}/documents/${docId}/media`),
   documentPages: (id: string, docId: string, from: number, count = 2) =>
     request<{ ok: boolean; pages: any[]; totalPages: number; filename: string }>(`/courses/${id}/documents/${docId}/pages?from=${from}&count=${count}`),
   analyze: (id: string) => request<any>(`/courses/${id}/analyze`, { method: 'POST', body: '{}' }),

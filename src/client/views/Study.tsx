@@ -247,6 +247,7 @@ export function DocumentsView({ courseId, revision, onChanged, notify }: {
   const { data, error, loading, reload } = useResource(() => api.documents(courseId), [courseId, revision])
   const [uploading, setUploading] = useState(false)
   const [reading, setReading] = useState<DocumentItem | null>(null)
+  const [galleryDoc, setGalleryDoc] = useState<DocumentItem | null>(null)
   const [pendingDelete, setPendingDelete] = useState<DocumentItem | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -359,6 +360,9 @@ export function DocumentsView({ courseId, revision, onChanged, notify }: {
                 {doc.status === 'parsing' || doc.status === 'analyzing' ? <span className="eg-spinner" /> : null}
                 <Badge tone={STATUS_TONE[doc.status]}>{STATUS_TEXT[doc.status] ?? doc.status}</Badge>
                 {doc.status === 'ready' ? <Button size="sm" variant="ghost" onClick={() => setReading(doc)}>翻原文</Button> : null}
+                {doc.status === 'ready' && /\.(docx|pptx)$/i.test(doc.filename)
+                  ? <Button size="sm" variant="ghost" onClick={() => setGalleryDoc(doc)}>看图片</Button>
+                  : null}
                 <Button size="sm" variant="ghost" onClick={() => setPendingDelete(doc)} aria-label="删除资料"><Icon name="trash" size={13} /></Button>
               </span>
             </div>
@@ -367,6 +371,7 @@ export function DocumentsView({ courseId, revision, onChanged, notify }: {
       )}
 
       {reading ? <ReaderModal courseId={courseId} doc={reading} onClose={() => setReading(null)} /> : null}
+      {galleryDoc ? <MediaGalleryModal courseId={courseId} doc={galleryDoc} onClose={() => setGalleryDoc(null)} /> : null}
 
       {pendingDelete ? (
         <Modal title="删掉这份资料？" onClose={() => setPendingDelete(null)}
@@ -387,7 +392,7 @@ function ReaderModal({ courseId, doc, onClose }: { courseId: string; doc: Docume
   const [pages, setPages] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<any>(null)
-  const [figure, setFigure] = useState<{ src: string; title: string } | null>(null)
+  const [figurePage, setFigurePage] = useState<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -399,12 +404,7 @@ function ReaderModal({ courseId, doc, onClose }: { courseId: string; doc: Docume
     return () => { cancelled = true }
   }, [courseId, doc.id, page])
 
-  const showFigure = (pageNo: number) => {
-    setFigure({
-      src: figureUrl(courseId, doc.id, pageNo),
-      title: `${doc.filename} · 第 ${pageNo} 页`,
-    })
-  }
+  const showFigure = (pageNo: number) => setFigurePage(Math.max(1, Math.min(doc.pages || 1, pageNo)))
 
   return (
     <Modal wide title={doc.filename} onClose={onClose}
@@ -428,8 +428,50 @@ function ReaderModal({ courseId, doc, onClose }: { courseId: string; doc: Docume
         </div>
       ))}
       {!loading && !pages.length ? <div className="eg-muted">这一页没有可显示的文字。</div> : null}
-      {figure ? <FigureModal src={figure.src} title={figure.title} hint="PDF 里的电路图是画出来的，所以这里把整页渲染成图片" onClose={() => setFigure(null)} /> : null}
+      {figurePage ? (
+        <FigureModal
+          src={figureUrl(courseId, doc.id, figurePage)}
+          title={`${doc.filename} · 第 ${figurePage} 页`}
+          hint="PDF 里的电路图是矢量画的，所以这里把整页渲染成图片"
+          onPrev={figurePage > 1 ? () => setFigurePage(figurePage - 1) : undefined}
+          onNext={figurePage < doc.pages ? () => setFigurePage(figurePage + 1) : undefined}
+          onClose={() => setFigurePage(null)}
+        />
+      ) : null}
     </Modal>
+  )
+}
+
+/** Word/PPT 内嵌图片画廊。 */
+function MediaGalleryModal({ courseId, doc, onClose }: { courseId: string; doc: DocumentItem; onClose: () => void }) {
+  const [media, setMedia] = useState<{ index: number; name: string; bytes: number }[] | null>(null)
+  const [active, setActive] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    api.documentMedia(courseId, doc.id)
+      .then((data) => { if (!cancelled) setMedia(data.media) })
+      .catch(() => { if (!cancelled) setMedia([]) })
+    return () => { cancelled = true }
+  }, [courseId, doc.id])
+
+  if (!media) return <Modal title={`${doc.filename} · 图片`} onClose={onClose}><Loading /></Modal>
+  if (!media.length) {
+    return (
+      <Modal title={`${doc.filename} · 图片`} onClose={onClose}>
+        <div className="eg-muted">这份资料里没有内嵌图片。PDF 的话用「翻原文 → 看这一页的图」。</div>
+      </Modal>
+    )
+  }
+  const current = media[Math.min(active, media.length - 1)]
+  return (
+    <FigureModal
+      src={mediaUrl(courseId, doc.id, current.index)}
+      title={`${doc.filename} · ${current.name}`}
+      hint={`第 ${active + 1} / ${media.length} 张`}
+      onPrev={active > 0 ? () => setActive(active - 1) : undefined}
+      onNext={active < media.length - 1 ? () => setActive(active + 1) : undefined}
+      onClose={onClose}
+    />
   )
 }
 

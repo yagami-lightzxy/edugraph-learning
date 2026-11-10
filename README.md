@@ -39,7 +39,8 @@
 
 在界面里：
 
-- 资料页 → 翻原文 → 每页上方「看这一页的图（电路图/波形）」按钮，点开就是整页高清图；
+- 资料页 → 翻原文 → 每页上方「看这一页的图（电路图/波形）」按钮，点开就是整页高清图，**查看器里可以直接 ← → 翻页**；
+- Word/PPT 资料在列表里有「看图片」，按顺序翻内嵌图片；
 - 讲解页 → 每个知识点卡片右上角「看原文图」，直接跳到它出处的那一页；
 - AI → 工具 `get_page_image` 返回图片路径，模型用 DSH 自带的 `read_image` 看一眼，就能照着图讲、照着图出题；
 - 图片资料（png/jpg）直接作为整页图显示，不经过解析。
@@ -63,8 +64,11 @@
 ```powershell
 cd D:\slaern\edugraph-learning; npm install          # 装 pdfjs-dist 与 canvas
 cd <profile>; pnpm install --prefer-offline            # 建 link
+node D:\slaern\edugraph-learning\scripts\health.mjs # 安装自检（依赖/链接/canvas）
 # 重启 DSH，侧栏出现「学习」
 ```
+
+> 装完必须**重启 DSH**：profile 的插件列表在启动时读取，热更新只覆盖插件代码、不覆盖新装插件。重启后跑一次 `scripts/health.mjs`，六项全 OK 就说明装好了。
 
 ### 方式二：不动用户 profile，起一个临时实例
 

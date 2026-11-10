@@ -139,7 +139,25 @@ export function Modal({ title, children, onClose, footer, wide }: any) {
 }
 
 /** 图片查看器：电路图、波形、示意图都在这里放大看。 */
-export function FigureModal({ src, title, hint, onClose }: { src: string; title: string; hint?: string; onClose: () => void }) {
+export function FigureModal({ src, title, hint, onClose, onPrev, onNext, busy }: {
+  src: string
+  title: string
+  hint?: string
+  onClose: () => void
+  onPrev?: () => void
+  onNext?: () => void
+  busy?: boolean
+}) {
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
+  useEffect(() => { setState('loading') }, [src])
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowLeft' && onPrev) { event.preventDefault(); onPrev() }
+      if (event.key === 'ArrowRight' && onNext) { event.preventDefault(); onNext() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onPrev, onNext])
   return (
     <div className="eg-modal-mask" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <div className="eg-modal wide" role="dialog" aria-modal="true" aria-label={title} style={{ width: 'min(1100px, 96vw)' }}>
@@ -150,11 +168,24 @@ export function FigureModal({ src, title, hint, onClose }: { src: string; title:
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><Icon name="close" size={14} /></Button>
         </div>
-        <div className="eg-modal-body" style={{ padding: 10, background: 'var(--eg-layer2)' }}>
-          <img src={src} alt={title} style={{ width: '100%', height: 'auto', borderRadius: 8, background: '#fff' }} />
+        <div className="eg-modal-body" style={{ padding: 10, background: 'var(--eg-layer2)', minHeight: 220, position: 'relative' }}>
+          {state === 'loading' ? <div className="eg-loading"><span className="eg-spinner" />正在把这一页画成图片…</div> : null}
+          {state === 'error' ? (
+            <div className="eg-empty" style={{ padding: 30 }}>
+              <div className="eg-empty-title">这张图没出来</div>
+              <div className="eg-empty-text">可能是缺 canvas 依赖或文件太大。在插件目录执行 <code>npm install canvas</code> 后重启 DSH 再试。</div>
+            </div>
+          ) : null}
+          <img src={src} alt={title} hidden={state !== 'ready'}
+            onLoad={() => setState('ready')} onError={() => setState('error')}
+            style={{ width: '100%', height: 'auto', borderRadius: 8, background: '#fff' }} />
         </div>
         <div className="eg-modal-foot">
-          <span className="eg-muted" style={{ marginRight: 'auto' }}>看不清可以右键图片另存，或用浏览器缩放</span>
+          <span className="eg-muted" style={{ marginRight: 'auto' }}>
+            {onPrev || onNext ? '← → 翻页 · ' : ''}看不清可以右键图片另存
+          </span>
+          {onPrev ? <Button size="sm" onClick={onPrev} disabled={busy}>上一页</Button> : null}
+          {onNext ? <Button size="sm" onClick={onNext} disabled={busy}>下一页</Button> : null}
           <Button onClick={onClose}>关闭</Button>
         </div>
       </div>

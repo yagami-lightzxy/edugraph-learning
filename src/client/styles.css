@@ -1020,6 +1020,8 @@ body[data-ds-dark-theme] .eg-app {
   cursor: pointer;
 }
 .eg-chat-fab:hover { background: var(--eg-brand-deep); }
+.eg-chat-native { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.eg-chat-native > * { flex: 1; min-width: 0; min-height: 0; }
 .eg-chat-head {
   flex: none;
   display: flex;

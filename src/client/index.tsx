@@ -23,7 +23,7 @@ import { newAskId, setTutorSender, type TutorAsk } from './tutor'
 
 export const name = 'edugraph-learning'
 /** 依赖的客户端服务：slots 组合 UI，layout 负责在主面板与原生会话之间切换。 */
-export const inject = ['slots', 'layout']
+export const inject = ['slots', 'layout', 'sessions']
 
 export const PANEL_ID = 'learning'
 
@@ -77,7 +77,8 @@ function useChatSession(): string | null {
 }
 
 /** 学习主面板。 */
-export function LearningPanel({ closePanel, chatEnabled = true }: PanelProps) {
+export function LearningPanel(props: PanelProps & Record<string, any>) {
+  const { closePanel, chatEnabled = true, sendChat } = props
   const [catalog, setCatalog] = useState<CourseListItem[]>([])
   const [courseId, setCourseId] = useState<string | null>(null)
   const [view, setView] = useState<ViewKey>('library')
@@ -110,10 +111,15 @@ export function LearningPanel({ closePanel, chatEnabled = true }: PanelProps) {
   const askTutor = useCallback((text: string, label?: string) => {
     if (!chatEnabled) return false
     setChat(true)
+    // 原生聊天坞直接走父页面的 conversation 服务；iframe 只作为没有原生 slot 时的兜底。
+    if (typeof sendChat === 'function' && sendChat(text)) {
+      notify(label ? `已把「${label}」发给 AI 导师` : '已把问题发给 AI 导师')
+      return true
+    }
     setAskRequest({ id: newAskId(), text, label })
     notify(label ? `已把「${label}」发给 AI 导师` : '已把问题发给 AI 导师')
     return true
-  }, [chatEnabled, notify, setChat])
+  }, [chatEnabled, notify, sendChat, setChat])
 
   const clearAsk = useCallback((id: number) => {
     setAskRequest((current) => (current && current.id === id ? null : current))
@@ -198,6 +204,9 @@ export function LearningPanel({ closePanel, chatEnabled = true }: PanelProps) {
   }, [revision, booting])
 
   const course = useMemo(() => catalog.find((item) => item.id === courseId) ?? null, [catalog, courseId])
+  const sessionsSnapshot = props.useSessions((snapshot: any) => snapshot)
+  const sessionRow = chatSession ? sessionsSnapshot?.byId?.[chatSession] : null
+  const sessionBlank = Boolean(sessionRow?.blank)
 
   const openCourse = useCallback((id: string) => {
     setCourseId(id)
@@ -447,6 +456,8 @@ export function LearningPanel({ closePanel, chatEnabled = true }: PanelProps) {
         <ChatDock
           open={chatOpen}
           sessionId={chatSession}
+          sessionBlank={sessionBlank}
+          renderFactorySlot={props.renderFactorySlot}
           askRequest={askRequest}
           onAskDone={clearAsk}
           onNotify={notify}
@@ -497,6 +508,21 @@ export function apply(ctx: any) {
     }
     trackChatSession(ctx)
 
+    // 原生聊天坞的发送口：不再需要 iframe；上下文「问导师」直接入当前会话。
+    const sendChat = (text: string) => {
+      const id = getChatSessionId()
+      if (!id) return false
+      try {
+        const conversation = ctx.sessions?.scope?.(id)?.get?.('conversation')
+        if (!conversation?.send) return false
+        void conversation.send(text).catch((error: any) => console.warn('[edugraph] sendChat failed', error))
+        return true
+      } catch (error) {
+        console.warn('[edugraph] sendChat unavailable', error)
+        return false
+      }
+    }
+
     const slots = ctx.slots ?? ctx.get?.('slots')
     const layout = ctx.layout ?? ctx.get?.('layout')
     if (!slots) { console.warn('[edugraph] no slots service'); return }
@@ -508,6 +534,7 @@ export function apply(ctx: any) {
         inject: () => ({
           closePanel: () => { layout?.selectPanel?.(null) },
           chatEnabled: true,
+          sendChat,
         }),
       }, LearningPanel)),
       'edugraph-learning: main panel',

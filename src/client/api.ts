@@ -126,6 +126,7 @@ export function mediaUrl(courseId: string, documentId: string, index: number) {
 
 export const api = {
   health: () => request<{ ok: boolean; version: string; storage: string }>('/health'),
+  chatInfo: () => request<{ ok: boolean; origin: string }>('/chat-info'),
   listCourses: () => request<{ courses: CourseListItem[]; lastCourseId: string | null; profile: any }>('/courses'),
   createCourse: (body: { name: string; subject?: string; goal?: string }) =>
     request<any>('/courses', { method: 'POST', body: JSON.stringify(body) }),

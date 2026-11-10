@@ -1,19 +1,17 @@
 /** 右侧「AI 导师」：内嵌当前 DSH 原生会话，并可接收学习视图带着上下文发来的问题。 */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '../api'
 import { Icon } from '../ui'
 import { chatFrameUrl } from '../embed'
 import type { TutorAsk } from '../tutor'
 
 type ChatStatus = 'loading' | 'ready' | 'slow' | 'error'
 
-function postOrigin(): string {
-  const origin = window.location.origin
-  return origin && origin !== 'null' ? origin : '*'
-}
-
-export function ChatDock({ open, sessionId, askRequest, onAskDone, onNotify, onClose, onExpand }: {
+export function ChatDock({ open, sessionId, sessionBlank, renderFactorySlot, askRequest, onAskDone, onNotify, onClose, onExpand }: {
   open: boolean
   sessionId: string | null
+  sessionBlank?: boolean
+  renderFactorySlot?: any
   askRequest: TutorAsk | null
   onAskDone: (id: number) => void
   onNotify: (message: string) => void
@@ -23,11 +21,34 @@ export function ChatDock({ open, sessionId, askRequest, onAskDone, onNotify, onC
   const [mounted, setMounted] = useState(open)
   const [nonce, setNonce] = useState(0)
   const [status, setStatus] = useState<ChatStatus>('loading')
+  const [chatOrigin, setChatOrigin] = useState('')
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const postedAsk = useRef<number | null>(null)
   const src = useMemo(() => chatFrameUrl(sessionId), [sessionId])
+  // 桌面端 dsh-app:// 里 iframe 会卡在鉴权；面板自带原生 conversation slot，
+  // 直接把它渲染进右侧坞，消息/模型/工具/审批都是同一套原生组件。
+  const nativeContent = useMemo(() => {
+    if (typeof renderFactorySlot !== 'function') return null
+    try {
+      // 不要传 sessionId：factory slot 已由原生会话 owner 提供，重复会触发 SlotAssemblyError。
+      const phase = sessionBlank ? 'hero' : 'active'
+      return renderFactorySlot('conversation.content', { variant: 'main', phase, hero: Boolean(sessionBlank) })
+    } catch (error) {
+      console.warn('[edugraph] native conversation slot unavailable', error)
+      return null
+    }
+  }, [renderFactorySlot, sessionBlank])
+  const connected = Boolean(nativeContent) || status === 'ready'
 
   useEffect(() => { if (open) setMounted(true) }, [open])
+
+  useEffect(() => {
+    let alive = true
+    api.chatInfo()
+      .then((data) => { if (alive && data?.origin) setChatOrigin(data.origin) })
+      .catch(() => undefined)
+    return () => { alive = false }
+  }, [])
 
   useEffect(() => {
     if (!mounted) return undefined
@@ -50,7 +71,7 @@ export function ChatDock({ open, sessionId, askRequest, onAskDone, onNotify, onC
     }
     postedAsk.current = askRequest.id
     try {
-      target.postMessage({ type: 'edugraph:ask', id: askRequest.id, text: askRequest.text }, postOrigin())
+      target.postMessage({ type: 'edugraph:ask', id: askRequest.id, text: askRequest.text }, chatOrigin || '*')
     } catch {
       onNotify('问题没有发出去，再点一次试试')
       onAskDone(askRequest.id)
@@ -63,13 +84,15 @@ export function ChatDock({ open, sessionId, askRequest, onAskDone, onNotify, onC
       }
     }, 8000)
     return () => window.clearTimeout(timer)
-  }, [askRequest, status, onAskDone, onNotify])
+  }, [askRequest, status, chatOrigin, onAskDone, onNotify])
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return
+      // 桌面端父页面是 dsh-app://，iframe 是 http://127.0.0.1；origin 不同，
+      // 但 event.source 必须是这个 iframe 的 WindowProxy。
+      if (chatOrigin && event.origin !== chatOrigin) return
       const frameWindow = frameRef.current?.contentWindow
-      if (frameWindow && event.source !== frameWindow) return
+      if (!frameWindow || event.source !== frameWindow) return
       const data = event.data as { type?: string; id?: number; message?: string } | null
       if (data?.type === 'edugraph:chat-ready') setStatus('ready')
       if (data?.type === 'edugraph:chat-failed') setStatus('error')
@@ -82,7 +105,7 @@ export function ChatDock({ open, sessionId, askRequest, onAskDone, onNotify, onC
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [onAskDone, onNotify])
+  }, [chatOrigin, onAskDone, onNotify])
 
   const reload = () => {
     postedAsk.current = null
@@ -93,23 +116,26 @@ export function ChatDock({ open, sessionId, askRequest, onAskDone, onNotify, onC
   if (!mounted) return null
 
   return (
-    <aside className="eg-chat" data-state={status} aria-label="AI 导师">
+    <aside className="eg-chat" data-state={nativeContent ? 'ready' : status} data-native={nativeContent ? 'true' : 'false'} aria-label="AI 导师">
       <header className="eg-chat-head">
         <span className="eg-chat-avatar"><Icon name="spark" size={17} /></span>
         <div className="eg-chat-title">
           <b>AI 导师</b>
           <span>
-            <i className="eg-live-dot" data-tone={status === 'error' ? 'error' : status === 'ready' ? 'success' : 'warn'} />
-            {status === 'ready' ? '与当前对话同步' : status === 'error' ? '连接失败，点刷新重试' : status === 'slow' ? '还在连接对话…' : '正在接入对话…'}
+            <i className="eg-live-dot" data-tone={status === 'error' && !nativeContent ? 'error' : connected ? 'success' : 'warn'} />
+            {nativeContent ? '与当前对话同步' : status === 'ready' ? '与当前对话同步' : status === 'error' ? '连接失败，点刷新重试' : status === 'slow' ? '还在连接对话…' : '正在接入对话…'}
           </span>
         </div>
         <div className="eg-chat-actions">
-          <button type="button" className="eg-icon-btn sm" title="重新加载对话" aria-label="重新加载对话" onClick={reload}><Icon name="refresh" size={14} /></button>
+          {nativeContent ? null : <button type="button" className="eg-icon-btn sm" title="重新加载对话" aria-label="重新加载对话" onClick={reload}><Icon name="refresh" size={14} /></button>}
           <button type="button" className="eg-icon-btn sm" title="在完整对话中打开" aria-label="在完整对话中打开" onClick={onExpand}><Icon name="panel" size={14} /></button>
           <button type="button" className="eg-icon-btn sm" title="收起导师（对话不中断）" aria-label="收起导师" onClick={onClose}><Icon name="close" size={14} /></button>
         </div>
       </header>
 
+      {nativeContent ? (
+        <div className="eg-chat-native">{nativeContent}</div>
+      ) : (
       <div className="eg-chat-body">
         <div className="eg-chat-frame-wrap">
           <iframe
@@ -142,6 +168,7 @@ export function ChatDock({ open, sessionId, askRequest, onAskDone, onNotify, onC
           ) : null}
         </div>
       </div>
+      )}
 
       <footer className="eg-chat-foot">
         <span className="eg-chat-sync"><i className="eg-live-dot" />{sessionId ? '当前课程与对话已共享' : '先在左侧选一门课'}</span>

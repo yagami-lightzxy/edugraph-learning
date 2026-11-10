@@ -13,21 +13,16 @@ export function isEmbedMode(): boolean {
   return readHash().embed
 }
 
-/** 右侧对话 iframe 的地址；sessionId 只作为提示，iframe 会自己再对齐一次。 */
+/**
+ * 右侧对话 iframe 的地址。
+ *
+ * 不直接嵌当前页面：桌面端主页面是 dsh-app://app/，子 frame 拿到的是自定义协议，
+ * 启动注入和鉴权都不会跟进去。这里先走插件宿主的 /chat-frame，由宿主 302 到
+ * 带启动 token 的 HTTP 地址，再带 hash 进入嵌入模式。
+ */
 export function chatFrameUrl(sessionId?: string | null): string {
-  if (typeof window === 'undefined') return '#'
-  const location = window.location
-  // 保留查询串：DSH 桌面端用 ?token=... 鉴权，丢掉它 iframe 会 401、一直转圈。
-  const base = location.origin && location.origin !== 'null'
-    ? location.origin + location.pathname + location.search
-    : location.href.split('#')[0]
-  return base + '#' + EMBED_HASH + (sessionId ? '|' + encodeURIComponent(sessionId) : '')
-}
-
-function parentTargetOrigin(): string {
-  if (typeof window === 'undefined') return '*'
-  const origin = window.location?.origin
-  return origin && origin !== 'null' ? origin : '*'
+  const session = sessionId ? '?session=' + encodeURIComponent(sessionId) : ''
+  return '/plugins/edugraph-learning/api/chat-frame' + session
 }
 
 function readHash(): { embed: boolean; sessionId: string | null } {
@@ -98,7 +93,7 @@ function announceReady() {
       tries += 1
       const composer = document.querySelector('[data-composer-input="true"]')
       if (composer || tries > 80) {
-        try { window.parent.postMessage({ type: 'edugraph:chat-ready' }, parentTargetOrigin()) } catch { /* ignore */ }
+        try { window.parent.postMessage({ type: 'edugraph:chat-ready' }, '*') } catch { /* ignore */ }
         return
       }
       window.setTimeout(tick, 250)
@@ -141,9 +136,10 @@ function installAskBridge(ctx: any, hintSessionId: string | null) {
   if (typeof window === 'undefined' || window.parent === window) return
   if ((window as any)[ASK_BRIDGE_FLAG]) return
   ;(window as any)[ASK_BRIDGE_FLAG] = true
-  const targetOrigin = parentTargetOrigin()
+  // 父页面现在可能是 dsh-app://、子 frame 是 http://127.0.0.1；跨 origin 时
+  // 只能靠 event.source 认父窗口，不能再比 event.origin。
   const post = (payload: any) => {
-    try { window.parent.postMessage(payload, targetOrigin) } catch { /* ignore */ }
+    try { window.parent.postMessage(payload, '*') } catch { /* ignore */ }
   }
 
   const resolveConversation = async () => {
@@ -167,7 +163,7 @@ function installAskBridge(ctx: any, hintSessionId: string | null) {
   }
 
   window.addEventListener('message', async (event: MessageEvent) => {
-    if (event.origin !== window.location.origin || event.source !== window.parent) return
+    if (event.source !== window.parent) return
     const data = event.data as { type?: string; id?: number; text?: string } | null
     if (data?.type !== 'edugraph:ask') return
     const text = typeof data.text === 'string' ? data.text.trim().slice(0, 4000) : ''

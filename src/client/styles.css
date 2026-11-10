@@ -936,6 +936,18 @@ body[data-ds-dark-theme] .eg-app {
 .eg-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--eg-border); }
 .eg-modal-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
 .eg-modal-body { display: flex; flex-direction: column; gap: 14px; padding: 20px; overflow: auto; }
+.eg-project-intro { display: flex; flex-direction: column; gap: 4px; }
+.eg-project-intro b { font-size: 14px; color: var(--eg-text); }
+.eg-project-intro span { font-size: 12px; line-height: 1.6; color: var(--eg-muted); }
+.eg-project-meta { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--eg-border); border-radius: 10px; background: var(--eg-layer2); }
+.eg-project-meta > div { display: flex; align-items: flex-start; gap: 10px; font-size: 12px; }
+.eg-project-meta span { flex: 0 0 66px; color: var(--eg-muted); }
+.eg-project-meta code { min-width: 0; color: var(--eg-text); word-break: break-all; font-size: 11px; }
+.eg-project-files { display: flex; flex-direction: column; gap: 5px; }
+.eg-project-file { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border: 1px solid var(--eg-border); border-radius: 8px; font-size: 12px; }
+.eg-project-file span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eg-project-file small, .eg-project-more { color: var(--eg-muted); font-size: 11px; white-space: nowrap; }
+.eg-project-more { padding: 2px 2px 0; }
 .eg-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--eg-border); }
 
 /* 外部 AI 课程包 */

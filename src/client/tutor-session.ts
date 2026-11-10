@@ -1,6 +1,7 @@
 /** 学习插件的独立导师会话：每门课一条 DSH 原生 session，不占用当前主对话。 */
 
-const MAP_KEY = 'edugraph.tutor.sessions'
+// v2：项目工作区上线后，旧的默认工作区导师会话不再复用，每课在项目工作区重建。
+const MAP_KEY = 'edugraph.tutor.sessions.v2'
 const PREV_KEY = 'edugraph.tutor.previous'
 
 export function readTutorSessions(): Record<string, string> {

@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import css from './styles.css'
-import { api, type CourseListItem } from './api'
+import { api, type CourseListItem, type ProjectInfo } from './api'
 import { BrandMark, Icon, Loading, ProgressRing } from './ui'
 import { LibraryView } from './views/Library'
 import { OverviewView, DocumentsView, PlanView } from './views/Study'
@@ -17,6 +17,7 @@ import { GraphView } from './views/Graph'
 import { SettingsView } from './views/Settings'
 import { ChatDock } from './views/Chat'
 import { PackModal } from './views/Pack'
+import { ProjectModal } from './views/Project'
 import { getChatSessionId, subscribeChatSession, trackChatSession } from './session'
 import { createTutorController } from './tutor-session'
 import { installChatEmbed } from './embed'
@@ -24,7 +25,7 @@ import { newAskId, setTutorSender, type TutorAsk } from './tutor'
 
 export const name = 'edugraph-learning'
 /** 依赖的客户端服务：slots 组合 UI，layout 负责在主面板与原生会话之间切换。 */
-export const inject = ['slots', 'layout', 'sessions']
+export const inject = ['slots', 'layout', 'sessions', 'workspaces', 'uiWorkspace']
 
 export const PANEL_ID = 'learning'
 
@@ -73,6 +74,10 @@ export type PanelProps = {
   ensureTutor?: (courseId: string, workspaceId?: string) => Promise<string | null>
   /** 由插件注入：返回学习前的主会话（只在用户明确“返回对话”时用）。 */
   restoreMain?: () => boolean
+  /** 由插件注入：在当前工作区建立/更新课程项目，并注册为 DSH 工作区。 */
+  ensureProject?: (courseId: string, basePath: string) => Promise<ProjectInfo>
+  openProject?: (workspaceId: string) => void
+  openTutorSession?: (courseId: string, workspaceId: string) => Promise<boolean>
 }
 
 function useChatSession(): string | null {
@@ -83,7 +88,7 @@ function useChatSession(): string | null {
 
 /** 学习主面板。 */
 export function LearningPanel(props: PanelProps & Record<string, any>) {
-  const { closePanel, chatEnabled = true, sendChat, ensureTutor, restoreMain } = props
+  const { closePanel, chatEnabled = true, sendChat, ensureTutor, restoreMain, ensureProject, openProject, openTutorSession } = props
   const [catalog, setCatalog] = useState<CourseListItem[]>([])
   const [courseId, setCourseId] = useState<string | null>(null)
   const [view, setView] = useState<ViewKey>('library')
@@ -98,11 +103,16 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
   const [tutorReady, setTutorReady] = useState(false)
   const [tutorError, setTutorError] = useState<string | null>(null)
   const [tutorAttempt, setTutorAttempt] = useState(0)
+  const [project, setProject] = useState<ProjectInfo | null>(null)
+  const [projectError, setProjectError] = useState<string | null>(null)
+  const [projectAttempt, setProjectAttempt] = useState(0)
+  const [projectOpen, setProjectOpen] = useState(false)
   const toastTimer = useRef<number | null>(null)
   const styleRef = useRef<HTMLStyleElement | null>(null)
   const mainRef = useRef<HTMLElement | null>(null)
   const chatSession = useChatSession()
   const workspaceRef = useRef<string | undefined>(undefined)
+  const workspacePathRef = useRef<string | undefined>(undefined)
   const workspacesSnapshot = props.useWorkspaces((snapshot: any) => snapshot)
 
   const notify = useCallback((message: string) => {
@@ -132,7 +142,21 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
       return true
     }
     if (courseId && typeof ensureTutor === 'function') {
-      void ensureTutor(courseId, workspaceRef.current).then((target) => {
+      const prepare = async () => {
+        if (project?.workspaceId) return project.workspaceId
+        if (typeof ensureProject !== 'function' || !workspacePathRef.current) return null
+        const next = await ensureProject(courseId, workspacePathRef.current)
+        setProject(next)
+        setProjectError(null)
+        return next.workspaceId ?? null
+      }
+      void prepare().then((workspaceId) => {
+        if (!workspaceId) {
+          notify('课程项目还没准备好，稍后再试一次')
+          return null
+        }
+        return ensureTutor(courseId, workspaceId)
+      }).then((target) => {
         if (!target) {
           notify('独立导师会话没有打开，稍后再试一次')
           return
@@ -144,7 +168,7 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
       return true
     }
     return deliver(null)
-  }, [chatEnabled, courseId, ensureTutor, notify, sendChat, setChat])
+  }, [chatEnabled, courseId, ensureProject, ensureTutor, notify, project?.workspaceId, sendChat, setChat])
 
   const clearAsk = useCallback((id: number) => {
     setAskRequest((current) => (current && current.id === id ? null : current))
@@ -242,12 +266,36 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
       ?? items[0]
       ?? null
   }, [workspacesSnapshot, chatSession, sessionRow?.cwd])
-  useEffect(() => { workspaceRef.current = workspaceRow?.workspaceId ?? undefined }, [workspaceRow])
-  const retryTutor = useCallback(() => setTutorAttempt((value) => value + 1), [])
+  useEffect(() => {
+    workspaceRef.current = workspaceRow?.workspaceId ?? undefined
+    workspacePathRef.current = workspaceRow?.path ?? undefined
+  }, [workspaceRow])
+  const retryTutor = useCallback(() => {
+    setProjectAttempt((value) => value + 1)
+    setTutorAttempt((value) => value + 1)
+  }, [])
+
+  // 每门课先建立项目工作区（资料复制进去），导师会话再建在这个工作区里。
+  useEffect(() => {
+    if (!courseId || !workspaceRow?.path || typeof ensureProject !== 'function') {
+      setProject(null)
+      setProjectError(null)
+      return undefined
+    }
+    let cancelled = false
+    setProject(null)
+    setProjectError(null)
+    void ensureProject(courseId, workspaceRow.path).then((next) => {
+      if (!cancelled) setProject(next)
+    }).catch((error: any) => {
+      if (!cancelled) setProjectError(error?.message ?? '课程项目没有建立')
+    })
+    return () => { cancelled = true }
+  }, [courseId, ensureProject, projectAttempt, workspaceRow?.path])
 
   // 右侧聊天不绑定当前主对话：进入课程/打开导师时，确保切到这门课自己的 DSH 会话。
   useEffect(() => {
-    if (!chatEnabled || !chatOpen || !courseId || typeof ensureTutor !== 'function') {
+    if (!chatEnabled || !chatOpen || !courseId || !project?.workspaceId || typeof ensureTutor !== 'function') {
       setTutorReady(false)
       setTutorError(null)
       return undefined
@@ -255,7 +303,7 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
     let cancelled = false
     setTutorReady(false)
     setTutorError(null)
-    void ensureTutor(courseId, workspaceRef.current).then((target) => {
+    void ensureTutor(courseId, project.workspaceId).then((target) => {
       if (cancelled) return
       setTutorReady(Boolean(target))
       if (!target) setTutorError('独立导师会话没有打开')
@@ -265,7 +313,7 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
       setTutorError(error?.message ?? '独立导师会话没有打开')
     })
     return () => { cancelled = true }
-  }, [chatEnabled, chatOpen, courseId, ensureTutor, tutorAttempt, workspaceRow?.workspaceId])
+  }, [chatEnabled, chatOpen, courseId, ensureTutor, project?.workspaceId, tutorAttempt])
 
   const openCourse = useCallback((id: string) => {
     setCourseId(id)
@@ -444,6 +492,11 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
           </div>
           <div className="eg-top-actions">
             {courseId ? (
+              <button type="button" className="eg-btn ghost sm eg-project-open" title="课程项目：资料和导师会话都在这个工作区" aria-label="打开课程项目" onClick={() => { setProjectOpen(true); if (!project) setProjectAttempt((value) => value + 1) }}>
+                <Icon name="layers" size={14} /><span className="eg-hide-sm">项目</span>
+              </button>
+            ) : null}
+            {courseId ? (
               <button type="button" className="eg-btn ghost sm eg-pack-open" title="用 ChatGPT / Claude 生成课程内容" aria-label="用其他 AI 生成课程内容" onClick={() => setPackOpen(true)}>
                 <Icon name="spark" size={14} /><span className="eg-hide-sm">AI 内容</span>
               </button>
@@ -521,7 +574,7 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
           sessionId={chatSession}
           sessionBlank={sessionBlank}
           tutorReady={tutorReady}
-          tutorError={tutorError}
+          tutorError={projectError ?? tutorError}
           onRetryTutor={retryTutor}
           renderFactorySlot={props.renderFactorySlot}
           askRequest={askRequest}
@@ -537,6 +590,28 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
         <button type="button" className="eg-chat-fab" onClick={() => setChat(true)} title="打开 AI 导师" aria-label="打开 AI 导师">
           <Icon name="chat" size={15} /> AI 导师
         </button>
+      ) : null}
+      {courseId && projectOpen ? (
+        <ProjectModal
+          open
+          course={course}
+          project={project}
+          error={projectError}
+          busy={!project && !projectError}
+          onClose={() => setProjectOpen(false)}
+          onOpenProject={() => {
+            if (!project?.workspaceId) return
+            setProjectOpen(false)
+            openProject?.(project.workspaceId)
+          }}
+          onOpenTutor={() => {
+            if (!project?.workspaceId) return
+            setProjectOpen(false)
+            void openTutorSession?.(courseId, project.workspaceId)
+          }}
+          onRetry={() => { setProjectAttempt((value) => value + 1); setTutorAttempt((value) => value + 1) }}
+          notify={notify}
+        />
       ) : null}
       {courseId && packOpen ? (
         <PackModal
@@ -593,6 +668,31 @@ export function apply(ctx: any) {
     const layout = ctx.layout ?? ctx.get?.('layout')
     if (!slots) { console.warn('[edugraph] no slots service'); return }
     const tutor = createTutorController(ctx, layout, PANEL_ID)
+    const workspaces = ctx.get?.('workspaces') ?? ctx.workspaces
+    const uiWorkspace = ctx.get?.('uiWorkspace') ?? ctx.uiWorkspace
+    const normPath = (value: any) => String(value ?? '').replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase()
+
+    // 课程项目：宿主建目录/复制资料，客户端把它注册成 DSH 工作区。
+    const ensureProject = async (courseId: string, basePath: string) => {
+      const result = await api.ensureProject(courseId, basePath)
+      const project = result.project
+      const list = workspaces?.list?.getSnapshot?.().items ?? []
+      let workspace = list.find((item: any) => normPath(item.path) === normPath(project.path))
+      if (!workspace) {
+        const created = await workspaces?.create?.({ path: project.path })
+        workspace = created?.workspace ?? created
+      }
+      if (!workspace?.workspaceId) throw new Error('课程项目没有注册成 DSH 工作区')
+      return { ...project, workspaceId: String(workspace.workspaceId), title: workspace.title || project.title }
+    }
+    const openProject = (workspaceId: string) => {
+      if (workspaceId) uiWorkspace?.openWorkspace?.(workspaceId)
+    }
+    const openTutorSession = async (courseId: string, workspaceId: string) => {
+      const target = await tutor.ensureTutor(courseId, workspaceId)
+      if (target) uiWorkspace?.openSession?.(target)
+      return Boolean(target)
+    }
 
     ctx.effect(
       () => slots.inject('main', () => slots.register({
@@ -604,6 +704,9 @@ export function apply(ctx: any) {
           sendChat,
           ensureTutor: tutor.ensureTutor,
           restoreMain: tutor.restoreMain,
+          ensureProject,
+          openProject,
+          openTutorSession,
         }),
       }, LearningPanel)),
       'edugraph-learning: main panel',

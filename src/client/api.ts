@@ -78,6 +78,16 @@ export type PackCounts = {
   chaptersAdded: number; conceptsAdded: number; conceptsUpdated: number
   questionsAdded: number; questionsSkipped: number; relationsAdded: number; relationsSkipped: number
 }
+export type ProjectFile = {
+  name: string; originalName: string; kind: string; pages: number | null; size: number | null
+}
+export type ProjectInfo = {
+  path: string; title: string; materials: number
+  files: ProjectFile[]
+  createdAt: string; updatedAt: string
+  /** 客户端补上：注册到 DSH 后的 workspace id。 */
+  workspaceId?: string
+}
 export type PackPreview = {
   ok: boolean; preview?: boolean; counts: PackCounts; warnings: string[]
   stats: PackStats; totals: { chapters: number; concepts: number; questions: number; relations: number }
@@ -138,6 +148,8 @@ export const api = {
     request<PackPreview>(`/courses/${id}/pack/preview`, { method: 'POST', body: JSON.stringify({ pack, overwriteDefinitions }) }),
   importPack: (id: string, pack: any, overwriteDefinitions = false) =>
     request<PackPreview & { course: Course }>(`/courses/${id}/pack`, { method: 'POST', body: JSON.stringify({ pack, overwriteDefinitions }) }),
+  ensureProject: (id: string, basePath: string) =>
+    request<{ ok: boolean; project: ProjectInfo }>(`/courses/${id}/project`, { method: 'POST', body: JSON.stringify({ basePath }) }),
   overview: (id: string) => request<{ ok: boolean } & Overview>(`/courses/${id}/overview`),
   graph: (id: string) => request<{ ok: boolean } & GraphData>(`/courses/${id}/graph`),
   documents: (id: string) => request<{ ok: boolean; documents: DocumentItem[] }>(`/courses/${id}/documents`),

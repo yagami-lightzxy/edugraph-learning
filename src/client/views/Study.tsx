@@ -8,6 +8,7 @@ import {
   Badge, Button, EmptyState, ErrorBox, Field, FigureModal, Icon, Loading, Modal,
   Progress, Section, Stat, useFileDrop, useResource,
 } from '../ui'
+import { askTutor, weakAsk } from '../tutor'
 
 const TASK_TEXT: Record<string, string> = {
   lesson: '讲解', practice: '练习', quiz: '小测', review: '复习', recap: '总复习',
@@ -50,18 +51,15 @@ export function OverviewView({ courseId, revision, onOpenView, notify }: {
   return (
     <div className="eg-grid" style={{ gap: 16 }}>
       {/* 今天先做这个 */}
-      <section className="eg-card" style={{
-        background: 'linear-gradient(135deg, color-mix(in srgb, var(--eg-brand) 10%, var(--eg-layer)) 0%, var(--eg-layer) 62%)',
-        borderColor: 'color-mix(in srgb, var(--eg-brand) 24%, transparent)',
-        padding: '20px 22px', gap: 14,
-      }}>
-        <div className="eg-row between" style={{ alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 720 }}>
-            <span className="eg-muted" style={{ fontSize: 11, letterSpacing: '1.2px', textTransform: 'uppercase' }}>现在做这个</span>
-            <span style={{ fontSize: 20, fontWeight: 680, letterSpacing: '-0.3px', lineHeight: 1.35 }}>{action.title}</span>
-            <span className="eg-muted" style={{ fontSize: 13 }}>{action.why}</span>
+      <section className="eg-card eg-today">
+        <div className="eg-today-main">
+          <span className="eg-today-icon"><Icon name={action.icon} size={22} /></span>
+          <div className="eg-today-copy">
+            <span className="eg-eyebrow">现在做这个</span>
+            <div className="eg-today-title">{action.title}</div>
+            <div className="eg-today-why">{action.why}</div>
           </div>
-          <Button variant="primary" onClick={() => onOpenView(action.view)} style={{ padding: '10px 18px', fontSize: 14 }}>
+          <Button variant="primary" className="eg-today-action" onClick={() => onOpenView(action.view)}>
             <Icon name={action.icon} size={15} />{action.label}
           </Button>
         </div>
@@ -87,7 +85,7 @@ export function OverviewView({ courseId, revision, onOpenView, notify }: {
         </Section>
       ) : null}
 
-      <div className="eg-grid cols-4">
+      <div className="eg-grid eg-stat-grid">
         <Stat value={stats.concepts} label="知识点" sub={`${stats.chapters} 个章节`} />
         <Stat value={stats.mastered} label="已经掌握" sub={`半熟 ${stats.familiar} · 还生 ${stats.weak}`} />
         <Stat value={stats.dueToday} label="今天该复习" sub={stats.dueToday > 0 ? '先复习，事半功倍' : '今天没有到期的'} />
@@ -145,7 +143,13 @@ export function OverviewView({ courseId, revision, onOpenView, notify }: {
           </div>
 
           <div className="eg-grid" style={{ gap: 16 }}>
-            <Section title="哪里还生" hint="按熟练度从低到高" actions={<Button size="sm" variant="ghost" onClick={() => onOpenView('graph')}>看图谱</Button>}>
+            <Section title="哪里还生" hint="按熟练度从低到高" actions={<>
+              <Button size="sm" variant="ghost" className="eg-ask" disabled={!weakConcepts.length}
+                onClick={() => askTutor(weakAsk(weakConcepts.slice(0, 6).map((concept) => concept.name)), '薄弱知识点')}>
+                <Icon name="chat" size={13} />问导师
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => onOpenView('graph')}>看图谱</Button>
+            </>}>
               {weakConcepts.length ? (
                 <div className="eg-wrap">
                   {weakConcepts.map((concept) => (

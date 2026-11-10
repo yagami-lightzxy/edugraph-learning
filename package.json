@@ -1,7 +1,15 @@
 {
   "name": "edugraph-learning",
-  "version": "1.1.1",
-  "description": "EduGraph AI 学习模式 · DSH 插件：资料解析（含电路图渲染）、知识图谱、学习计划、练习批改与间隔复习",
+  "version": "1.2.0",
+  "description": "EduGraph AI 学习模式 · DSH 插件：资料解析（含电路图渲染）、知识图谱、学习计划、练习批改、间隔复习与面板内 AI 导师",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yagami-lightzxy/edugraph-learning.git"
+  },
+  "homepage": "https://github.com/yagami-lightzxy/edugraph-learning#readme",
+  "bugs": {
+    "url": "https://github.com/yagami-lightzxy/edugraph-learning/issues"
+  },
   "type": "module",
   "main": "./lib/index.js",
   "exports": {

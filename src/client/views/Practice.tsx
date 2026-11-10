@@ -7,6 +7,7 @@ import type { QuizRequest } from '../index'
 import {
   Badge, Button, EmptyState, ErrorBox, FigureModal, Icon, Loading, Modal, Progress, Section, useResource,
 } from '../ui'
+import { askTutor, conceptAsk, groupAsk, mistakeAsk, recallAsk } from '../tutor'
 
 // ---------------------------------------------------------------- 讲解
 
@@ -108,6 +109,10 @@ export function LessonView({ courseId, revision, onChanged, notify, onPractice }
             <div className="eg-row">
               <Badge tone={masteryLabel(card.level).tone}>{masteryLabel(card.level).text}</Badge>
               <span className="eg-muted">{Math.round(card.mastery * 100)}%</span>
+              <Button size="sm" variant="ghost" className="eg-ask" title="带着这个知识点去问右侧 AI 导师"
+                onClick={() => askTutor(conceptAsk(card.name, card.definition), card.name)}>
+                <Icon name="chat" size={13} />问导师
+              </Button>
               {card.sourceRefs[0]?.pageNo ? (
                 <Button size="sm" variant="ghost" title="把这一页画出来看"
                   onClick={() => setFigure({
@@ -153,6 +158,10 @@ export function LessonView({ courseId, revision, onChanged, notify, onPractice }
           onChange={(event) => setRecall(event.target.value)} />
         <div className="eg-row">
           <Button size="sm" onClick={() => setRevealed(true)}>对照答案</Button>
+          <Button size="sm" variant="ghost" className="eg-ask" title="让导师用问题引导你回忆"
+            onClick={() => askTutor(recallAsk(lesson.cards.map((card) => card.name), lesson.recallPrompt), '这组知识点')}>
+            <Icon name="chat" size={13} />问导师
+          </Button>
           {revealed ? (
             <>
               <span className="eg-muted">回忆质量：</span>
@@ -386,6 +395,23 @@ export function QuizView({ courseId, request, onChanged, notify, onOpenLesson, o
             <div className="eg-muted">
               熟练度 {Math.round((result.state?.mastery ?? 0) * 100)}% · 下次安排在今天之后 {formatDue(result.review?.due)}
             </div>
+            {question ? (
+              <div className="eg-row" style={{ marginTop: 2 }}>
+                <Button size="sm" variant="ghost" className="eg-ask"
+                  onClick={() => {
+                    const myAnswer = question.options.length ? answerText(state.answer, question.options) : state.answer
+                    const expected = result.grade.correctAnswer
+                      ? answerText(result.grade.correctAnswer, result.grade.options)
+                      : result.grade.expected
+                    askTutor(
+                      result.grade.correct ? conceptAsk(question.conceptName, result.grade.explanation) : mistakeAsk(question, myAnswer, expected),
+                      question.conceptName,
+                    )
+                  }}>
+                  <Icon name="chat" size={13} />{result.grade.correct ? '问导师：再讲深一点' : '问导师：为什么错'}
+                </Button>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -453,7 +479,13 @@ export function MistakesView({ courseId, revision, notify, onPractice }: {
           <Section key={group.conceptId}
             title={group.conceptName}
             hint={`错 ${group.wrongCount} 次 · 最近 ${formatDue(new Date(group.lastAt).getTime())}`}
-            actions={<Button size="sm" variant="ghost" onClick={() => onPractice([group.conceptId])}>重做</Button>}>
+            actions={<>
+              <Button size="sm" variant="ghost" className="eg-ask"
+                onClick={() => askTutor(groupAsk(group.conceptName, group.definition, (group.errorTags ?? []).map((tag: any) => tag.tag)), group.conceptName)}>
+                <Icon name="chat" size={13} />问导师
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => onPractice([group.conceptId])}>重做</Button>
+            </>}>
             {group.definition ? <div className="eg-concept-def" style={{ fontSize: 12 }}>{group.definition}</div> : null}
             <div className="eg-wrap">
               {group.errorTags.map((tag: any) => <Badge key={tag.tag} tone="warn">{tag.tag} ×{tag.count}</Badge>)}
@@ -511,9 +543,15 @@ export function ReviewView({ courseId, revision, notify, onChanged, onPractice }
           <div className="eg-muted">{due.length} 个今天该复习 · {upcoming.length} 个以后再说（按记忆曲线排的）</div>
         </div>
         {due.length ? (
-          <Button size="sm" variant="primary" onClick={() => onPractice(due.slice(0, 10).map((item: any) => item.conceptId))}>
-            <Icon name="repeat" size={13} />开始复习（{Math.min(10, due.length)}）
-          </Button>
+          <div className="eg-row">
+            <Button size="sm" variant="ghost" className="eg-ask"
+              onClick={() => askTutor(recallAsk(due.slice(0, 8).map((item: any) => item.name), '我今天要复习这些到期知识点，请先各用一个问题考我，别先给答案。'), '复习')}>
+              <Icon name="chat" size={13} />问导师
+            </Button>
+            <Button size="sm" variant="primary" onClick={() => onPractice(due.slice(0, 10).map((item: any) => item.conceptId))}>
+              <Icon name="repeat" size={13} />开始复习（{Math.min(10, due.length)}）
+            </Button>
+          </div>
         ) : null}
       </div>
 

@@ -8,8 +8,9 @@ import { readZip, readZipText } from '../lib/parse/zip.js'
 import { repeatedRowTexts } from '../lib/parse/pdf.js'
 import { cleanText } from '../lib/parse/text.js'
 
-const PDF_PATH = 'D:/28060/Documents/mo_dian/(11.1.1)--模电—随课笔记.pdf'
-const HAS_PDF = existsSync(PDF_PATH)
+// 真实 PDF 是可选验收：用环境变量指向本机文件；公开仓库不提交个人路径。
+const PDF_PATH = process.env.EDUGRAPH_REAL_PDF || ''
+const HAS_PDF = Boolean(PDF_PATH) && existsSync(PDF_PATH)
 const BACKTICKS = String.fromCharCode(96).repeat(3)
 
 let crcTable = null

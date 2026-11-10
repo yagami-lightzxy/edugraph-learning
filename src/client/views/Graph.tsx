@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, masteryLabel, type GraphData } from '../api'
 import { Badge, Button, EmptyState, ErrorBox, Icon, Loading, Section, useResource } from '../ui'
+import { askTutor, graphAsk } from '../tutor'
 
 const CANVAS_W = 1240
 const CANVAS_H = 780
@@ -284,6 +285,13 @@ export function GraphView({ courseId, revision, notify, onPractice }: {
   const edges = (visibleGraph?.edges ?? []).filter((edge) => showRelated || edge.type === 'prerequisite')
 
   const selectedNode = graph.nodes.find((node) => node.id === selected) ?? null
+  const selectedRelated = selectedNode
+    ? graph.edges
+      .filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id)
+      .map((edge) => graph.nodes.find((node) => node.id === (edge.source === selectedNode.id ? edge.target : edge.source))?.name)
+      .filter((name): name is string => Boolean(name))
+      .slice(0, 6)
+    : []
   const mastered = graph.nodes.filter((node) => node.mastery >= 0.85).length
   const showLabels = !large || zoom > 1.2
   const hullOpacity = large && !chapterFilter && !focusId ? 0 : 1
@@ -491,6 +499,10 @@ export function GraphView({ courseId, revision, notify, onPractice }: {
           title={selectedNode.name}
           hint={`${masteryLabel(selectedNode.level).text} · 熟练度 ${Math.round(selectedNode.mastery * 100)}% · 练过 ${selectedNode.attempts} 次 · ${selectedNode.sourceCount} 处原文`}
           actions={<>
+            <Button size="sm" variant="ghost" className="eg-ask"
+              onClick={() => askTutor(graphAsk(selectedNode.name, selectedNode.definition, selectedRelated), selectedNode.name)}>
+              <Icon name="chat" size={13} />问导师
+            </Button>
             <Button size="sm" variant="primary" onClick={() => onPractice([selectedNode.id])}><Icon name="quiz" size={13} />练这个</Button>
             <Button size="sm" variant="ghost" onClick={() => { setSelected(null); fit() }}>收起</Button>
           </>}>

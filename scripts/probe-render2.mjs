@@ -1,6 +1,6 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { createCanvas, Path2D as NapiPath2D } from '@napi-rs/canvas'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
 // pdfjs 会优先用全局 Path2D/DOMMatrix；与 @napi-rs/canvas 的实现混用会导致 fill 参数错乱，
 // 这里让 pdfjs 退回逐点路径构建。
@@ -32,6 +32,6 @@ ctx.fillRect(0, 0, canvas.width, canvas.height)
 const started = Date.now()
 await page.render({ canvasContext: ctx, viewport }).promise
 const png = await canvas.encode('png')
-await writeFile('D:/slaern/outputs/shots/render-page4.png', png)
+await mkdir('outputs/shots', { recursive: true }); await writeFile('outputs/shots/render-page4.png', png)
 console.log('render ms:', Date.now() - started, 'size:', canvas.width, 'x', canvas.height, 'bytes:', png.length)
 await doc.destroy()

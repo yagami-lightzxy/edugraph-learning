@@ -1,16 +1,20 @@
 # EduGraph AI · DSH 学习模式
 
-把 DeepSeek Harness（DSH）变成一台能真正带人学完一门课的机器：传资料 → 拆章节和知识点 → 排计划 → 讲解、出题、批改 → 错题与复习。**电路图、波形这类"文字里没有"的东西，也能看到。**
+把 DeepSeek Harness（DSH）变成一台能真正带人学完一门课的机器：传资料 → 拆章节和知识点 → 排计划 → 讲解、出题、批改 → 错题与复习。**电路图、波形这类"文字里没有"的东西，也能看到。** 学习面板右侧直接就是当前对话，问图、问题、让 AI 讲，都不用离开课程。
 
-![概览](docs/screenshot-overview.png)
+![学习面板：左侧课程导航、中间学习内容，AI 导师在右侧随时展开](docs/screenshot-library.png)
 
-| 知识图谱（按章节聚焦） | 图示（PDF 电路图现渲染） |
+| AI 导师（与当前对话同步） | 知识图谱（按章节聚焦） |
 |---|---|
-| ![图谱](docs/screenshot-graph.png) | ![图示](docs/screenshot-figure.png) |
+| ![AI 导师](docs/screenshot-chat.png) | ![图谱](docs/screenshot-graph.png) |
 
 | 讲解与主动回忆 | 练习批改 |
 |---|---|
 | ![讲解](docs/screenshot-lesson.png) | ![练习](docs/screenshot-quiz-answer.png) |
+
+| 图示（PDF 电路图现渲染） | 课程库首屏 |
+|---|---|
+| ![图示](docs/screenshot-figure.png) | ![课程库](docs/screenshot-library.png) |
 
 ## 用到了哪些技术
 
@@ -19,6 +23,7 @@
 | 宿主插件 | Node ESM + Cordis（`export const name/inject/apply`） | 注册 HTTP 路由与 18 个 Agent 工具 |
 | 浏览器插件 | React 18 + TypeScript（TSX）+ esbuild | 学习面板 UI，编译成 `window.__ModuleLoader__` 惰性 CJS bundle |
 | 面板接入 | `ctx.slots.register({name:'main', key:'learning'})` + `ctx.layout.selectPanel` | 与 DSH 原生会话一键切换 |
+| 面板内对话 | 同源 iframe 嵌入原生会话 + `ctx.layout.selectPanel(null)` | 复用模型、工具、权限、审批与历史，不另写聊天 |
 | 数据 | 本地 JSON（原子写 + 键锁），无数据库 | 课程知识 / 个人学习状态分离存储 |
 | PDF | `pdfjs-dist`（legacy build） | 取文字、字号、页面；判定章节层级 |
 | PDF 图示 | `pdfjs-dist` + `canvas`（node-canvas） | 把整页**渲染成 PNG**，矢量画的电路图也能看 |
@@ -47,6 +52,27 @@
 
 `canvas` 是可选依赖：没装上时功能自动降级为提示「缺少 canvas 依赖」，其它功能不受影响。
 
+## 在学习面板里直接对话（v1.2）
+
+右侧的「AI 导师」不是另做的聊天框，而是把**当前 DSH 原生会话**以同源 iframe 嵌进学习面板：
+
+- 模型、工具权限、历史、队列、附件、审批弹窗都是同一份，你在右侧发的消息回到完整对话里同样在；
+- 讲解卡片、错题、图谱节点和概览的薄弱知识点旁边都有「问导师」，点一下会带着当前知识点/错题上下文直接发过去，自动打开右侧并发送，不用复制粘贴；
+- 插件工具默认打开界面里正在学的那门课，所以可以直接问「这一页的电路图怎么看」「刚才那道题为什么错」；
+- 对话坞可收起、可刷新，也可以点「在完整对话中打开」切回原生会话；窄面板下自动变成右侧浮层；
+- iframe 加载失败时会提示回完整对话，学习数据与进度不受影响。
+
+实现上，嵌入实例只做四件事：注入紧凑样式、强制显示会话、对齐当前课程对应的会话、接收「问导师」的上下文提问；它不注册学习面板，避免递归。面板本身用容器查询按 DSH 主区域的实际宽度收放左侧栏，所以原生侧栏展开时也不会把中间内容挤扁。
+
+> 取舍：用 iframe 是当前 DSH 插件 API 下复用原生会话最稳的做法——自写聊天会丢掉工具调用、审批和队列，而会话渲染组件没有对插件暴露。代价是首次打开会多加载一个客户端实例；对话收起后实例保留，二次打开很快。等 DSH 提供嵌入式会话组件，这一层可以替换。
+
+## 和同类学习产品有什么不同
+
+- **NotebookLM 一类**强在「资料内问答 + 出处」，但不管学习计划、练习和间隔复习；
+- **Quizlet / Knowt 一类**强在题库和测验，但知识来源以手工录入为主，缺少本地资料解析、知识点前后置关系和可执行工具；
+- **Anki / RemNote 一类**强在间隔重复和知识组织，但卡片通常要自己整理，AI 对话不是主场；
+- **这个插件**把「资料解析 → 图谱 → 计划 → 讲解/练习 → 复习」和当前 DSH 原生会话放在同一个本地工作区里，学习内容和导师共享课程上下文；这是它相对的差异点，不是每个单项的绝对优势。
+
 ## 安装
 
 插件是纯 ESM + 一个已构建的浏览器 bundle，不需要构建服务、不需要数据库。
@@ -56,15 +82,15 @@
 ```jsonc
 // ~/.dsh/profiles/<profile>/package.json
 {
-  "dependencies": { "edugraph-learning": "link:D:/slaern/edugraph-learning" },
+  "dependencies": { "edugraph-learning": "link:<插件绝对路径>" },
   "dsh": { "profile": { "bundles": [ /* … */ , "edugraph-learning" ] } }
 }
 ```
 
 ```powershell
-cd D:\slaern\edugraph-learning; npm install          # 装 pdfjs-dist 与 canvas
-cd <profile>; pnpm install --prefer-offline            # 建 link
-node D:\slaern\edugraph-learning\scripts\health.mjs # 安装自检（依赖/链接/canvas）
+cd <插件目录>; npm install                    # 装 pdfjs-dist 与 canvas
+cd <profile>; pnpm install --prefer-offline   # 建 link
+node <插件目录>\scripts\health.mjs            # 安装自检（依赖/链接/canvas）
 # 重启 DSH，侧栏出现「学习」
 ```
 
@@ -84,7 +110,8 @@ node <dsh>/lib/bin.js --profile web --patch dev-patch.example.yml --port 3900 --
 4. **学**：讲解页看定义和原文，先自己回忆，再对照；然后做题，做完立刻批改并告诉你错在哪。
 5. **补**：错题页按知识点归堆，一键重练；复习页按记忆曲线排好到期任务。
 6. **看图**：遇到电路图、波形，点「看这一页的图」。
-7. **回对话**：右上角「返回对话」回到 DSH 原生会话，模型、工具权限、历史都不变。
+7. **直接问**：右侧「AI 导师」就是当前 DSH 对话本身，模型、工具、历史都在；问图、问概念、让 AI 接着讲都行。不想占屏幕就收起，或点「在完整对话中打开」。
+8. **回对话**：右上角「返回对话」回到 DSH 原生会话，模型、工具权限、历史都不变。
 
 界面上的「现在做这个」永远只给一个下一步，不用自己想到底该干嘛。
 
@@ -123,7 +150,7 @@ $DSH_HOME/storages/edugraph-learning/
 ## 开发
 
 ```powershell
-npm test                       # 56 项测试
+npm test                       # 56 项；真实 PDF 用例需设置 EDUGRAPH_REAL_PDF
 npm run build                  # 重新生成 lib/client.js
 node scripts/e2e-real.mjs "<一份真实 PDF>"   # 真实课程全链路
 node scripts/verify-bundle.mjs               # 客户端 bundle 合同
@@ -132,7 +159,7 @@ node scripts/verify-tools.mjs <dsh-tools 的 json-schema.js>   # 用 DSH 校验�
 
 ```
 lib/           宿主侧：api / service / store / parse / analyze / plan / quiz / grade / fsrs / search / media / tools
-src/client/    浏览器侧：index.tsx（面板注册）、ui.tsx、views/*.tsx、styles.css
+src/client/    浏览器侧：index.tsx（三栏骨架）、ui.tsx、views/*.tsx（含 Chat.tsx 导师坞）、embed.ts、session.ts、tutor.ts、styles.css
 scripts/       构建与校验脚本
 test/          node:test 套件
 docs/          工程说明与截图
@@ -145,6 +172,14 @@ docs/          工程说明与截图
 - 选项生成依赖定义，没有定义的概念只出填空题。
 - 单课程上限：220 概念 / 160 任务 / 单文件 80MB；按页渲染一次约 0.5 秒（之后走缓存）。
 - 数据只在本机，不做多设备同步。
+- 面板内对话依赖 DSH 原生页面的同源环境；宿主如果禁用了 iframe，会提示回完整对话，学习功能不受影响。
+- 对话坞展示的是当前原生会话；切换会话仍在原生对话里完成。
+
+## 更新记录
+
+- **v1.2.0**：学习面板改成三栏（课程导航 / 学习内容 / AI 导师），首屏、导航、卡片与练习反馈统一视觉；面板内 AI 导师复用当前 DSH 原生会话，可收起或展开；讲解/错题/图谱/概览支持带上下文「问导师」自动发送；修复反向选择题被当成简答题判分的问题。
+- **v1.1.1**：PDF 文档缓存、图片查看器翻页、Office 图片画廊、安装自检脚本。
+- **v1.1.0**：学习面板、电路图渲染、知识图谱与间隔复习。
 
 ## 许可
 

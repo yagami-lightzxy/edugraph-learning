@@ -123,7 +123,7 @@ describe('纯函数：分析 / 计划 / 题目 / 判分', () => {
       ],
       questions: [],
     }
-    const created = generateQuestions({ meta, conceptIds: ['k1', 'k2', 'k3'], count: 9, blocks: [] })
+    const created = generateQuestions({ meta, conceptIds: ['k1', 'k2', 'k3'], count: 12, blocks: [] })
     assert.ok(created.length >= 6, `应生成至少 6 道题，实际 ${created.length}`)
     const types = new Set(created.map((q) => q.type))
     assert.ok(types.size >= 3, '题型应有多样性')
@@ -133,6 +133,14 @@ describe('纯函数：分析 / 计划 / 题目 / 判分', () => {
     assert.equal(graded.correct, true)
     const wrong = gradeAnswer(choice, (Number(choice.answer) + 1) % choice.options.length)
     assert.equal(wrong.correct, false)
+    const reverse = created.find((q) => q.type === 'choice-reverse')
+    assert.ok(reverse, '应生成反向选择题')
+    assert.equal(gradeAnswer(reverse, reverse.answer).correct, true, '反向选择题选正确项应判对')
+    assert.equal(gradeAnswer(reverse, (Number(reverse.answer) + 1) % reverse.options.length).correct, false)
+    const judge = created.find((q) => q.type === 'judge')
+    assert.ok(judge, '应生成判断题')
+    assert.equal(gradeAnswer(judge, judge.answer).correct, true)
+    assert.equal(gradeAnswer(judge, 1 - Number(judge.answer)).correct, false)
   })
 
   it('简答题按关键点覆盖给分', () => {

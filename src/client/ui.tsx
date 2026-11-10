@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type IconName =
   | 'book' | 'layers' | 'target' | 'graph' | 'quiz' | 'flag' | 'repeat' | 'settings'
-  | 'plus' | 'upload' | 'trash' | 'close' | 'chevron' | 'spark' | 'check' | 'clock' | 'search' | 'arrow-right' | 'refresh'
+  | 'plus' | 'upload' | 'trash' | 'close' | 'chevron' | 'spark' | 'check' | 'clock' | 'search' | 'arrow-right' | 'arrow-left' | 'refresh'
+  | 'chat' | 'panel'
 
 const PATHS: Record<IconName, string> = {
   book: 'M4 5.5A2.5 2.5 0 0 1 6.5 3H20v14.5H6.5A2.5 2.5 0 0 0 4 20V5.5Zm0 0V20',
@@ -24,7 +25,10 @@ const PATHS: Record<IconName, string> = {
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13v5l3.5 2',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm5.2-1.8L21 21',
   'arrow-right': 'M4 12h15m0 0-5-5m5 5-5 5',
+  'arrow-left': 'M20 12H5m0 0 5-5m-5 5 5 5',
   refresh: 'M20 11a8 8 0 0 0-14-4.5L4 8m0-4v4h4M4 13a8 8 0 0 0 14 4.5L20 16m0 4v-4h-4',
+  chat: 'M20.5 11.6a8.2 8.2 0 0 1-11.9 7.3L4 20l1.2-4.3A8.2 8.2 0 1 1 20.5 11.6ZM8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01',
+  panel: 'M4 4h16v16H4V4Zm10 0v16',
 }
 
 export function Icon({ name, size = 16, className }: { name: IconName; size?: number; className?: string }) {
@@ -57,6 +61,45 @@ export function Progress({ value, tone = 'brand' }: { value: number; tone?: stri
     <div className="eg-progress" data-tone={tone} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
       <i style={{ width: `${pct}%` }} />
     </div>
+  )
+}
+
+/** 环形进度：侧栏课程卡、概览等地方用。 */
+export function ProgressRing({ value, size = 42, stroke = 4, tone = 'brand', label }: {
+  value: number
+  size?: number
+  stroke?: number
+  tone?: string
+  label?: string
+}) {
+  const pct = Math.max(0, Math.min(100, Math.round((Number(value) || 0) * 100)))
+  const radius = (size - stroke) / 2
+  const circumference = 2 * Math.PI * radius
+  return (
+    <svg className="eg-ring" data-tone={tone} width={size} height={size} viewBox={`0 0 ${size} ${size}`}
+      role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label ?? '完成度'}>
+      <circle className="eg-ring-track" cx={size / 2} cy={size / 2} r={radius} strokeWidth={stroke} fill="none" />
+      <circle className="eg-ring-fill" cx={size / 2} cy={size / 2} r={radius} strokeWidth={stroke} fill="none"
+        strokeLinecap="round" strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - pct / 100)}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+    </svg>
+  )
+}
+
+/** 品牌标：用节点连成的小书，和知识图谱呼应。 */
+export function BrandMark({ size = 40 }: { size?: number }) {
+  return (
+    <span className="eg-brand-mark" style={{ width: size, height: size }} aria-hidden="true">
+      <svg viewBox="0 0 32 32" width={size * 0.62} height={size * 0.62} fill="none">
+        <path d="M7 10.5 16 6l9 4.5v11L16 26l-9-4.5v-11Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" opacity=".55" />
+        <path d="M7 10.5 16 15l9-4.5M16 15v11" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" opacity=".75" />
+        <circle cx="16" cy="15" r="2.6" fill="currentColor" />
+        <circle cx="7" cy="10.5" r="1.8" fill="currentColor" opacity=".9" />
+        <circle cx="25" cy="10.5" r="1.8" fill="currentColor" opacity=".9" />
+        <circle cx="16" cy="26" r="1.8" fill="currentColor" opacity=".9" />
+      </svg>
+    </span>
   )
 }
 

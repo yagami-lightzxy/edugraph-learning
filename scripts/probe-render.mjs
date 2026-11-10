@@ -1,6 +1,6 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { createCanvas } from '@napi-rs/canvas'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
 const buffer = await readFile(process.argv[2])
 const doc = await getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, disableFontFace: true }).promise
@@ -28,6 +28,6 @@ ctx.fillRect(0, 0, canvas.width, canvas.height)
 const started = Date.now()
 await page.render({ canvasContext: ctx, viewport }).promise
 const png = await canvas.encode('png')
-await writeFile('D:/slaern/outputs/shots/render-page2.png', png)
+await mkdir('outputs/shots', { recursive: true }); await writeFile('outputs/shots/render-page2.png', png)
 console.log('render ms:', Date.now() - started, 'size:', canvas.width, 'x', canvas.height, 'png bytes:', png.length)
 await doc.destroy()

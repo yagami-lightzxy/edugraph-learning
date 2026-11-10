@@ -1,7 +1,7 @@
-/** 课程库：创建课程、进入最近学习、删除课程。 */
+/** 课程库：漂亮的首屏、创建课程、进入学习、删除课程。 */
 import { useState } from 'react'
 import { api, formatDate, type CourseListItem } from '../api'
-import { Button, EmptyState, Field, Icon, Modal, Progress, Section, useResource } from '../ui'
+import { Button, Field, Icon, Modal, ProgressRing } from '../ui'
 
 export function LibraryView({ catalog, onOpen, onChanged, notify }: {
   catalog: CourseListItem[]
@@ -50,49 +50,106 @@ export function LibraryView({ catalog, onOpen, onChanged, notify }: {
 
   return (
     <div className="eg-grid" style={{ gap: 18 }}>
-      <div className="eg-row between">
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 680, letterSpacing: '-0.3px' }}>课程库</div>
-          <div className="eg-muted">传一份资料，它会整理出章节和知识点，再把讲解、练习、复习排好。</div>
+      <section className="eg-hero">
+        <div className="eg-hero-copy">
+          <div className="eg-hero-eyebrow"><span className="eg-hero-dot" />EduGraph · AI 学习模式</div>
+          <h1 className="eg-hero-title">把课件变成<br /><em>一条走得完的学习路径</em></h1>
+          <p className="eg-hero-text">
+            传一份资料，自动拆出章节和知识点，再按考试日期排好讲解、练习和复习。右侧 AI 导师随时能问，不用离开学习界面。
+          </p>
+          <div className="eg-hero-actions">
+            <button type="button" className="eg-btn eg-hero-primary" onClick={() => setCreating(true)}>
+              <Icon name="plus" size={15} />新建课程
+            </button>
+            {catalog.length ? (
+              <a className="eg-hero-link" href="#eg-course-grid" onClick={(event) => {
+                event.preventDefault()
+                document.getElementById('eg-course-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}>看看我的课程 <Icon name="chevron" size={13} /></a>
+            ) : null}
+          </div>
+          <div className="eg-hero-meta">
+            <span><Icon name="upload" size={13} />PDF / Word / PPT / 图片</span>
+            <span><Icon name="graph" size={13} />知识图谱</span>
+            <span><Icon name="repeat" size={13} />间隔复习</span>
+          </div>
         </div>
-        <Button variant="primary" onClick={() => setCreating(true)}><Icon name="plus" size={14} />新建课程</Button>
-      </div>
+        <div className="eg-hero-visual" aria-hidden="true"><HeroArt /></div>
+      </section>
 
       {catalog.length === 0 ? (
-        <Section>
-          <EmptyState
-            title="还没有课程"
-            text="新建一门课，把 PDF、Word、PPT、Markdown 或图片拖进来。整理完会自动得到知识点先后的关系图和学习计划。"
-            action={<Button variant="primary" onClick={() => setCreating(true)}>创建第一门课程</Button>}
-          />
-        </Section>
-      ) : (
-        <div className="eg-grid cols-3">
+        <div className="eg-steps">
+          <div className="eg-step">
+            <span className="eg-step-icon"><Icon name="upload" size={17} /></span>
+            <div><b>把资料拖进来</b><p>PDF、Word、PPT、Markdown 或图片，一份就够开始。</p></div>
+          </div>
+          <div className="eg-step">
+            <span className="eg-step-icon"><Icon name="graph" size={17} /></span>
+            <div><b>自动拆成知识点</b><p>章节、定义和先后关系一起整理好，不用手动记。</p></div>
+          </div>
+          <div className="eg-step">
+            <span className="eg-step-icon"><Icon name="target" size={17} /></span>
+            <div><b>跟着计划学</b><p>按考试日期和每天时长排讲解、练习与复习。</p></div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="eg-row between">
+        <div>
+          <div className="eg-section-title">我的课程</div>
+          <div className="eg-muted">{catalog.length ? catalog.length + ' 门课 · 随时接着上次的进度' : '还没有课程，从上面新建一门'}</div>
+        </div>
+        {catalog.length ? (
+          <Button variant="primary" onClick={() => setCreating(true)}><Icon name="plus" size={14} />新建课程</Button>
+        ) : null}
+      </div>
+
+      {catalog.length ? (
+        <div id="eg-course-grid" className="eg-grid eg-course-grid">
           {catalog.map((course) => (
             <div key={course.id} className="eg-course-card" onClick={() => onOpen(course.id)} role="button" tabIndex={0}
               onKeyDown={(event) => { if (event.key === 'Enter') onOpen(course.id) }}>
-              <div className="eg-row between">
-                <div className="eg-course-name eg-ellipsis">{course.name}</div>
-                <button type="button" className="eg-btn ghost sm" title="删掉课程"
+              <div className="eg-course-top">
+                <span className="eg-course-icon"><Icon name="book" size={17} /></span>
+                <div className="eg-course-heading">
+                  <div className="eg-course-name eg-ellipsis" title={course.name}>{course.name}</div>
+                  <div className="eg-course-meta">
+                    {course.subject ? <span>{course.subject}</span> : null}
+                    <span>{course.documentCount} 份资料</span>
+                    <span>{course.conceptCount} 个知识点</span>
+                  </div>
+                </div>
+                <button type="button" className="eg-icon-btn sm eg-course-delete" title="删掉课程"
                   onClick={(event) => { event.stopPropagation(); setPendingDelete(course) }}>
                   <Icon name="trash" size={13} />
                 </button>
               </div>
-              <div className="eg-course-meta">
-                {course.subject ? <span>{course.subject}</span> : null}
-                <span>{course.documentCount} 份资料</span>
-                <span>{course.conceptCount} 个概念</span>
-                {course.examDate ? <span>考试 {course.examDate}</span> : null}
+
+              <div className="eg-course-progress">
+                <ProgressRing value={(course.progress ?? 0) / 100} size={46} stroke={5} label={course.name + ' 的完成度'} />
+                <div className="eg-course-progress-text">
+                  <b>{course.progress ?? 0}%</b>
+                  <span>计划完成 · 复习稳固 {course.masteredCount ?? 0}/{course.conceptCount ?? 0}</span>
+                </div>
               </div>
-              <div className="eg-course-ring">
-                <div className="eg-fill"><Progress value={course.progress / 100} /></div>
-                <span className="eg-muted eg-nowrap">{course.progress}%</span>
-              </div>
-              <div className="eg-muted">
-                {course.lastStudiedAt ? `上次学到：${formatDate(course.lastStudiedAt)}` : '还没开始'}
+
+              <div className="eg-course-foot">
+                <span className="eg-muted">
+                  {course.lastStudiedAt ? '上次学到 ' + formatDate(course.lastStudiedAt).split(' ')[0] : '还没开始'}
+                  {course.examDate ? ' · 考试 ' + course.examDate.slice(5) : ''}
+                </span>
+                <span className="eg-course-go">继续学习 <Icon name="chevron" size={13} /></span>
               </div>
             </div>
           ))}
+        </div>
+      ) : (
+        <div className="eg-start-card">
+          <div className="eg-start-card-copy">
+            <b>第一门课，从一份资料开始</b>
+            <span>建好课程后把 PDF、Word、PPT 或 Markdown 拖到「资料」页，剩下交给 EduGraph。</span>
+          </div>
+          <Button variant="primary" onClick={() => setCreating(true)}><Icon name="plus" size={14} />创建第一门课程</Button>
         </div>
       )}
 
@@ -144,5 +201,44 @@ export function LibraryView({ catalog, onOpen, onChanged, notify }: {
         </Modal>
       ) : null}
     </div>
+  )
+}
+
+/** 首屏右侧的装饰图：几个知识点连成一张会呼吸的网。 */
+function HeroArt() {
+  return (
+    <svg className="eg-hero-art" viewBox="0 0 320 240" fill="none">
+      <defs>
+        <linearGradient id="eg-hero-line" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity=".75" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity=".12" />
+        </linearGradient>
+        <radialGradient id="eg-hero-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stopColor="#ffffff" stopOpacity=".5" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx="214" cy="112" r="98" fill="url(#eg-hero-glow)" opacity=".5" />
+      <g className="eg-hero-lines" stroke="url(#eg-hero-line)" strokeWidth="1.2">
+        <path d="M72 158 126 102 192 132 254 70" />
+        <path d="M126 102 118 42M126 102 56 88M192 132 234 168M192 132 198 194M254 70 288 124" />
+      </g>
+      <g className="eg-hero-nodes" fill="#ffffff">
+        <circle cx="72" cy="158" r="5" opacity=".85" />
+        <circle cx="126" cy="102" r="8" />
+        <circle cx="192" cy="132" r="6" />
+        <circle cx="254" cy="70" r="4" />
+        <circle cx="118" cy="42" r="3.5" opacity=".65" />
+        <circle cx="56" cy="88" r="3" opacity=".6" />
+        <circle cx="234" cy="168" r="3.5" opacity=".7" />
+        <circle cx="198" cy="194" r="3" opacity=".55" />
+        <circle cx="288" cy="124" r="2.5" opacity=".5" />
+      </g>
+      <g className="eg-hero-labels" fill="#ffffff" fontSize="9" opacity=".85">
+        <text x="138" y="96">概念</text>
+        <text x="202" y="152">关系</text>
+        <text x="82" y="178">掌握</text>
+      </g>
+    </svg>
   )
 }

@@ -113,6 +113,7 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
   const chatSession = useChatSession()
   const workspaceRef = useRef<string | undefined>(undefined)
   const workspacePathRef = useRef<string | undefined>(undefined)
+  const baseWorkspaceRef = useRef<string | undefined>(undefined)
   const workspacesSnapshot = props.useWorkspaces((snapshot: any) => snapshot)
 
   const notify = useCallback((message: string) => {
@@ -269,7 +270,11 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
   useEffect(() => {
     workspaceRef.current = workspaceRow?.workspaceId ?? undefined
     workspacePathRef.current = workspaceRow?.path ?? undefined
-  }, [workspaceRow])
+    // 课程库没有课程时，右侧用当前工作区的全局导师会话；进入课程后保留这个“base”。
+    if (!baseWorkspaceRef.current && !courseId && workspaceRow?.workspaceId) {
+      baseWorkspaceRef.current = workspaceRow.workspaceId
+    }
+  }, [workspaceRow, courseId])
   const retryTutor = useCallback(() => {
     setProjectAttempt((value) => value + 1)
     setTutorAttempt((value) => value + 1)
@@ -293,9 +298,11 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
     return () => { cancelled = true }
   }, [courseId, ensureProject, projectAttempt, workspaceRow?.path])
 
-  // 右侧聊天不绑定当前主对话：进入课程/打开导师时，确保切到这门课自己的 DSH 会话。
+  // 右侧聊天不绑定当前主对话：课程内用课程项目工作区的导师，课程库用当前工作区的全局导师。
   useEffect(() => {
-    if (!chatEnabled || !chatOpen || !courseId || !project?.workspaceId || typeof ensureTutor !== 'function') {
+    const tutorKey = courseId || '__library__'
+    const tutorWorkspace = courseId ? project?.workspaceId : baseWorkspaceRef.current
+    if (!chatEnabled || !chatOpen || !tutorWorkspace || typeof ensureTutor !== 'function') {
       setTutorReady(false)
       setTutorError(null)
       return undefined
@@ -303,7 +310,7 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
     let cancelled = false
     setTutorReady(false)
     setTutorError(null)
-    void ensureTutor(courseId, project.workspaceId).then((target) => {
+    void ensureTutor(tutorKey, tutorWorkspace).then((target) => {
       if (cancelled) return
       setTutorReady(Boolean(target))
       if (!target) setTutorError('独立导师会话没有打开')
@@ -313,7 +320,7 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
       setTutorError(error?.message ?? '独立导师会话没有打开')
     })
     return () => { cancelled = true }
-  }, [chatEnabled, chatOpen, courseId, ensureTutor, project?.workspaceId, tutorAttempt])
+  }, [chatEnabled, chatOpen, courseId, ensureTutor, project?.workspaceId, tutorAttempt, workspaceRow?.workspaceId])
 
   const openCourse = useCallback((id: string) => {
     setCourseId(id)
@@ -360,8 +367,8 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
   }
 
   const showNav = Boolean(courseId)
-  // 没有课程时不渲染右侧坞，避免在课程库把当前主对话误显示成“导师”。
-  const showChat = Boolean(chatEnabled) && Boolean(courseId)
+  // 课程库也有右侧对话，但用的是独立的全局导师会话，不是当前主对话。
+  const showChat = Boolean(chatEnabled)
   const dataChat = showChat && chatOpen ? 'true' : 'false'
 
   return (

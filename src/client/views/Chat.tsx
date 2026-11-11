@@ -182,7 +182,7 @@ export function ChatDock({ open, sessionId, sessionBlank, tutorReady, tutorError
       )}
 
       <footer className="eg-chat-foot">
-        <span className="eg-chat-sync"><i className="eg-live-dot" />{sessionId ? '当前课程与导师会话已共享' : '先在左侧选一门课'}</span>
+        <span className="eg-chat-sync"><i className="eg-live-dot" />{sessionId ? '当前工作区与导师会话已共享' : '先在左侧选一门课'}</span>
         <span className="eg-chat-hint">Enter 发送 · Shift + Enter 换行</span>
       </footer>
     </aside>

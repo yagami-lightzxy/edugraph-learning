@@ -171,6 +171,15 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
     return deliver(null)
   }, [chatEnabled, courseId, ensureProject, ensureTutor, notify, project?.workspaceId, sendChat, setChat])
 
+  const quickAsk = useCallback((text: string) => {
+    setChat(true)
+    if (typeof sendChat === 'function' && sendChat(text, chatSession ?? undefined)) {
+      notify('已把问题发给 AI 导师')
+    } else {
+      notify('导师还没准备好，稍后再试')
+    }
+  }, [chatSession, notify, sendChat, setChat])
+
   const clearAsk = useCallback((id: number) => {
     setAskRequest((current) => (current && current.id === id ? null : current))
   }, [])
@@ -584,6 +593,7 @@ export function LearningPanel(props: PanelProps & Record<string, any>) {
           tutorError={projectError ?? tutorError}
           onRetryTutor={retryTutor}
           renderFactorySlot={props.renderFactorySlot}
+          onQuickAsk={quickAsk}
           askRequest={askRequest}
           onAskDone={clearAsk}
           onNotify={notify}

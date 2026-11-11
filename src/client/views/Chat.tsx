@@ -7,7 +7,7 @@ import type { TutorAsk } from '../tutor'
 
 type ChatStatus = 'loading' | 'ready' | 'slow' | 'error'
 
-export function ChatDock({ open, sessionId, sessionBlank, tutorReady, tutorError, onRetryTutor, renderFactorySlot, askRequest, onAskDone, onNotify, onClose, onExpand }: {
+export function ChatDock({ open, sessionId, sessionBlank, tutorReady, tutorError, onRetryTutor, renderFactorySlot, onQuickAsk, askRequest, onAskDone, onNotify, onClose, onExpand }: {
   open: boolean
   sessionId: string | null
   sessionBlank?: boolean
@@ -15,6 +15,7 @@ export function ChatDock({ open, sessionId, sessionBlank, tutorReady, tutorError
   tutorError?: string | null
   onRetryTutor?: () => void
   renderFactorySlot?: any
+  onQuickAsk?: (text: string) => void
   askRequest: TutorAsk | null
   onAskDone: (id: number) => void
   onNotify: (message: string) => void
@@ -34,13 +35,13 @@ export function ChatDock({ open, sessionId, sessionBlank, tutorReady, tutorError
     if (typeof renderFactorySlot !== 'function') return null
     try {
       // 不要传 sessionId：factory slot 已由原生会话 owner 提供，重复会触发 SlotAssemblyError。
-      const phase = sessionBlank ? 'hero' : 'active'
-      return renderFactorySlot('conversation.content', { variant: 'main', phase, hero: Boolean(sessionBlank) })
+      // 空会话也走 active，把 DSH 通用首屏让给下面的学习欢迎卡。
+      return renderFactorySlot('conversation.content', { variant: 'main', phase: 'active', hero: false })
     } catch (error) {
       console.warn('[edugraph] native conversation slot unavailable', error)
       return null
     }
-  }, [renderFactorySlot, sessionBlank])
+  }, [renderFactorySlot])
   const pending = tutorReady === false
   const connected = !pending && (Boolean(nativeContent) || status === 'ready')
 
@@ -145,7 +146,25 @@ export function ChatDock({ open, sessionId, sessionBlank, tutorReady, tutorError
           {tutorError ? <button type="button" className="eg-btn sm" onClick={onRetryTutor}>重试</button> : null}
         </div>
       ) : nativeContent ? (
-        <div className="eg-chat-native">{nativeContent}</div>
+        <>
+          {sessionBlank ? (
+            <div className="eg-chat-welcome">
+              <div className="eg-chat-welcome-head">
+                <span className="eg-chat-avatar"><Icon name="spark" size={17} /></span>
+                <div>
+                  <b>从一句话开始</b>
+                  <span>课程、题目、复习都可以问我，也可以让我帮你安排今天学什么。</span>
+                </div>
+              </div>
+              <div className="eg-chat-chips">
+                <button type="button" onClick={() => onQuickAsk?.('怎么开始用 EduGraph？')}>怎么开始用</button>
+                <button type="button" onClick={() => onQuickAsk?.('帮我安排今天的学习')}>安排今天</button>
+                <button type="button" onClick={() => onQuickAsk?.('上传资料后能做什么？')}>能做什么</button>
+              </div>
+            </div>
+          ) : null}
+          <div className="eg-chat-native">{nativeContent}</div>
+        </>
       ) : (
       <div className="eg-chat-body">
         <div className="eg-chat-frame-wrap">

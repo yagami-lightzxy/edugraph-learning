@@ -143,15 +143,7 @@ export function LibraryView({ catalog, onOpen, onChanged, notify }: {
             </div>
           ))}
         </div>
-      ) : (
-        <div className="eg-start-card">
-          <div className="eg-start-card-copy">
-            <b>第一门课，从一份资料开始</b>
-            <span>建好课程后把 PDF、Word、PPT 或 Markdown 拖到「资料」页，剩下交给 EduGraph。</span>
-          </div>
-          <Button variant="primary" onClick={() => setCreating(true)}><Icon name="plus" size={14} />创建第一门课程</Button>
-        </div>
-      )}
+      ) : null}
 
       {creating ? (
         <Modal

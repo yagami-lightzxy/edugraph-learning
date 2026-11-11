@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import os from 'node:os'
 import path from 'node:path'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, lstat, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { LearningStore } from '../lib/store.js'
 import { ensureProject, safeSegment } from '../lib/project.js'
 
@@ -35,7 +35,7 @@ test('safeSegment strips path separators and trailing dots', () => {
   assert.equal(safeSegment('   ...   '), '课程')
 })
 
-test('ensureProject creates a course workspace and copies materials', async () => {
+test('ensureProject creates a course workspace and shares materials via a link', async () => {
   const { root, store, workspace } = await fixture()
   try {
     const meta = await store.createCourse({ name: '模拟电子技术', subject: '电子工程', goal: '掌握二极管' })
@@ -48,6 +48,11 @@ test('ensureProject creates a course workspace and copies materials', async () =
     assert.equal(project.files[0].name, '第一章 半导体.pdf')
     assert.equal(project.files[1].name, '第一章 半导体 (2).pdf')
     assert.equal(await readFile(path.join(project.path, 'materials', '第一章 半导体.pdf'), 'utf8'), 'fake-pdf-content')
+
+    const link = await lstat(path.join(project.path, 'materials'))
+    assert.equal(link.isSymbolicLink(), true)
+    assert.equal(project.materialsMode, 'link')
+    assert.equal(await readFile(path.join(store.documentsDir(meta.course.id), '第一章 半导体.pdf'), 'utf8'), 'fake-pdf-content')
 
     const manifest = JSON.parse(await readFile(path.join(project.path, 'project.json'), 'utf8'))
     assert.equal(manifest.course.id, meta.course.id)
@@ -74,6 +79,27 @@ test('same course name gets a distinct project folder', async () => {
     const pb = await ensureProject(store, b.course.id, workspace)
     assert.notEqual(pa.path, pb.path)
     assert.match(path.basename(pb.path), /同一门课/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('ensureProject migrates an old real materials copy into the shared link', async () => {
+  const { root, store, workspace } = await fixture()
+  try {
+    const meta = await store.createCourse({ name: '迁移课程' })
+    await addDoc(store, meta.course.id, 'd1.pdf', '讲义.pdf')
+    const projectPath = path.join(workspace, 'EduGraph', 'EduGraph - 迁移课程')
+    await mkdir(path.join(projectPath, 'materials'), { recursive: true })
+    await copyFile(path.join(store.documentsDir(meta.course.id), 'd1.pdf'), path.join(projectPath, 'materials', '讲义.pdf'))
+    await store.mutateCourse(meta.course.id, (draft) => {
+      draft.project = { path: projectPath, title: 'EduGraph · 迁移课程', createdAt: new Date().toISOString() }
+    })
+
+    const project = await ensureProject(store, meta.course.id, workspace)
+    assert.equal(project.materialsMode, 'link')
+    assert.equal((await lstat(path.join(project.path, 'materials'))).isSymbolicLink(), true)
+    assert.equal(await readFile(path.join(project.path, 'materials', '讲义.pdf'), 'utf8'), 'fake-pdf-content')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

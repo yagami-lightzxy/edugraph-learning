@@ -48,7 +48,7 @@ export function ProjectModal({ open, course, project, error, busy, onClose, onOp
         <>
           <div className="eg-project-meta">
             <div><span>项目路径</span><code>{project.path}</code></div>
-            <div><span>资料</span><b>{project.materials} 个文件</b></div>
+            <div><span>资料</span><b>{project.materials} 个文件 · {project.materialsMode === 'copy' ? '项目内副本' : '与插件共享，不占双份'}</b></div>
             <div><span>导师会话</span><b>独立 DSH 会话 · 这个项目工作区</b></div>
           </div>
           {project.files.length ? (

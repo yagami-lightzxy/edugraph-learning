@@ -83,6 +83,7 @@ export type ProjectFile = {
 }
 export type ProjectInfo = {
   path: string; title: string; materials: number
+  materialsMode?: 'link' | 'copy'
   files: ProjectFile[]
   createdAt: string; updatedAt: string
   /** 客户端补上：注册到 DSH 后的 workspace id。 */

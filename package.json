@@ -1,6 +1,6 @@
 {
   "name": "edugraph-learning",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "EduGraph AI 学习模式 · DSH 插件：资料解析（含电路图渲染）、知识图谱、学习计划、练习批改、间隔复习与面板内 AI 导师",
   "repository": {
     "type": "git",

@@ -41,12 +41,12 @@ export function OverviewView({ courseId, revision, onOpenView, notify }: {
   const action = !hasDocs
     ? { title: '先上传一份课程资料', why: 'PDF、Word、PPT 都行。系统会拆出章节和知识点，之后才有得学。', label: '去上传', view: 'documents', icon: 'upload' as const }
     : !hasPlan
-      ? { title: '生成一份学习计划', why: '告诉我考试日期和每天能学多久，我按知识点顺序排好讲解、练习和复习。', label: '去排计划', view: 'plan', icon: 'target' as const }
+      ? { title: '生成一份学习计划', why: '告诉我目标（考试日期可选），我按章节排好讲解、练习和复习，学完一章自动进下一章。', label: '去排计划', view: 'plan', icon: 'target' as const }
       : dueReviews.length > 0
         ? { title: `先复习 ${dueReviews.length} 个快忘掉的知识点`, why: '这几个今天到期。先复习再学新的，记得更牢。', label: '开始复习', view: 'review', icon: 'repeat' as const }
         : nextTasks.length
-          ? { title: `接着学「${nextTasks[0].title}」`, why: `大约 ${nextTasks[0].estimatedMinutes} 分钟。学完这一组就完成今天的任务了。`, label: '开始学习', view: nextTasks[0].type === 'practice' || nextTasks[0].type === 'quiz' ? 'quiz' : 'lesson', icon: 'spark' as const }
-          : { title: '今天的任务都完成了', why: '想多学一点可以再来一组练习，或者去图谱看看哪块还不熟。', label: '再练一组', view: 'quiz', icon: 'check' as const }
+          ? { title: `接着学「${nextTasks[0].title}」`, why: `大约 ${nextTasks[0].estimatedMinutes} 分钟。学完这一组就进入下一组，按章节往前走。`, label: '开始学习', view: nextTasks[0].type === 'practice' || nextTasks[0].type === 'quiz' ? 'quiz' : 'lesson', icon: 'spark' as const }
+          : { title: '当前这一轮任务都完成了', why: '想多学一点可以再来一组练习，或者去图谱看看哪块还不熟。', label: '再练一组', view: 'quiz', icon: 'check' as const }
 
   return (
     <div className="eg-grid" style={{ gap: 16 }}>
@@ -77,9 +77,9 @@ export function OverviewView({ courseId, revision, onOpenView, notify }: {
           <div className="eg-grid cols-3">
             <StepCard index={1} done={hasDocs} title="上传资料" text={hasDocs ? `已上传 ${stats.documents} 份` : '课程 PDF、课件或笔记，一份就够开始'}
               action={hasDocs ? null : { label: '去上传', onClick: () => onOpenView('documents') }} />
-            <StepCard index={2} done={hasGoal} title="说一下目标" text={hasGoal ? `目标：${profile.goal || '已记录'}` : '考试时间、每天能学多久，决定计划强度'}
+            <StepCard index={2} done={hasGoal} title="说一下目标" text={hasGoal ? `目标：${profile.goal || '已记录'}` : '想达到什么、什么时候考试，决定章节顺序'}
               action={hasGoal ? null : { label: '去设置', onClick: () => onOpenView('settings') }} />
-            <StepCard index={3} done={hasPlan} title="生成计划" text={hasPlan ? `${planProgress.total} 个任务已排好` : '按知识点顺序排讲解、练习和复习'}
+            <StepCard index={3} done={hasPlan} title="生成计划" text={hasPlan ? `${planProgress.total} 个任务已排好` : '按章节顺序排讲解、练习和复习'}
               action={hasPlan ? null : { label: '去排计划', onClick: () => onOpenView('plan') }} />
           </div>
         </Section>
@@ -110,7 +110,7 @@ export function OverviewView({ courseId, revision, onOpenView, notify }: {
                       <span className="eg-dot" data-tone={TASK_TONE[task.type] ?? 'brand'} />
                       <span className="eg-list-main">
                         <span className="eg-list-title">{task.title}</span>
-                        <span className="eg-list-sub">{TASK_TEXT[task.type] ?? task.type} · 约 {task.estimatedMinutes} 分钟 · 排在 {task.dueDate}</span>
+                        <span className="eg-list-sub">{TASK_TEXT[task.type] ?? task.type} · 约 {task.estimatedMinutes} 分钟{task.chapterTitle ? ` · ${task.chapterTitle}` : ''}</span>
                       </span>
                       <span className="eg-list-side"><Icon name="chevron" size={14} /></span>
                     </button>
@@ -491,18 +491,18 @@ export function PlanView({ courseId, revision, onChanged, notify, onStartLesson 
   const { data, error, loading, reload } = useResource(() => api.plan(courseId), [courseId, revision])
   const [generating, setGenerating] = useState(false)
   const [filter, setFilter] = useState<'todo' | 'all'>('todo')
-  const [form, setForm] = useState({ goal: '', examDate: '', dailyMinutes: 45 })
+  const [form, setForm] = useState({ goal: '', examDate: '' })
 
   useEffect(() => {
     if (!data?.plan) return
-    setForm({ goal: data.plan.goal ?? '', examDate: data.profile?.examDate ?? '', dailyMinutes: data.plan.dailyMinutes ?? 45 })
+    setForm({ goal: data.plan.goal ?? '', examDate: data.profile?.examDate ?? '' })
   }, [data?.plan?.id, data?.plan?.version])
 
   const generate = async () => {
     setGenerating(true)
     try {
-      const result = await api.generatePlan(courseId, { goal: form.goal, examDate: form.examDate, dailyMinutes: Number(form.dailyMinutes) || 45 })
-      notify(`排好了：${result.plan.tasks.length} 个任务，到 ${result.plan.targetDate}`)
+      const result = await api.generatePlan(courseId, { goal: form.goal, examDate: form.examDate })
+      notify(`排好了：${result.plan.tasks.length} 个任务，按章节推进`)
       onChanged()
       await reload(true)
     } catch (err: any) {
@@ -526,9 +526,17 @@ export function PlanView({ courseId, revision, onChanged, notify, onStartLesson 
   const progress = data?.progress ?? { total: 0, done: 0, percent: 0 }
   const grouped = useMemo(() => {
     const tasks = (plan?.tasks ?? []).filter((task) => filter === 'all' || task.status !== 'done')
-    const byDate = new Map<string, Task[]>()
-    for (const task of tasks) byDate.set(task.dueDate || '未排期', [...(byDate.get(task.dueDate || '未排期') ?? []), task])
-    return [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    const byChapter = new Map<string, { title: string; tasks: Task[] }>()
+    for (const task of tasks) {
+      const id = task.chapterId || '__recap__'
+      const title = task.chapterTitle || (task.chapterId ? '章节' : '总复习')
+      const group = byChapter.get(id) ?? { title, tasks: [] }
+      group.tasks.push(task)
+      byChapter.set(id, group)
+    }
+    return [...byChapter.values()]
+      .map((group) => ({ ...group, tasks: group.tasks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) }))
+      .sort((a, b) => (a.tasks[0]?.order ?? 0) - (b.tasks[0]?.order ?? 0))
   }, [plan, filter])
 
   if (loading && !data) return <Loading />
@@ -540,7 +548,7 @@ export function PlanView({ courseId, revision, onChanged, notify, onStartLesson 
         <div>
           <div style={{ fontSize: 17, fontWeight: 650 }}>学习计划</div>
           <div className="eg-muted">
-            {plan ? `到 ${plan.targetDate} 学完 · 每天 ${plan.dailyMinutes} 分钟 · 共 ${plan.tasks.length} 个任务` : '还没排'}
+            {plan ? `按章节推进 · 共 ${plan.tasks.length} 个任务 · 约 ${plan.totalMinutes} 分钟${plan.targetDate ? ` · 目标 ${plan.targetDate}` : ''}` : '还没排'}
           </div>
         </div>
         <div className="eg-row">
@@ -550,18 +558,14 @@ export function PlanView({ courseId, revision, onChanged, notify, onStartLesson 
       </div>
 
       <Section title={plan ? '改一改再排' : '排一份计划'} hint="改完重排时，已经完成的任务不会被清掉">
-        <div className="eg-grid cols-3">
+        <div className="eg-grid cols-2">
           <Field label="这次想达到什么">
-            <input className="eg-input" value={form.goal} placeholder="比如：两周内会做二极管电路题"
+            <input className="eg-input" value={form.goal} placeholder="比如：会做二极管与三极管电路题"
               onChange={(event) => setForm({ ...form, goal: event.target.value })} />
           </Field>
-          <Field label="考试或截止日期">
+          <Field label="考试或截止日期（可选）">
             <input className="eg-input" type="date" value={form.examDate}
               onChange={(event) => setForm({ ...form, examDate: event.target.value })} />
-          </Field>
-          <Field label="每天能学多久（分钟）">
-            <input className="eg-input" type="number" min={10} max={480} value={form.dailyMinutes}
-              onChange={(event) => setForm({ ...form, dailyMinutes: Number(event.target.value) })} />
           </Field>
         </div>
         <div className="eg-row">
@@ -573,21 +577,21 @@ export function PlanView({ courseId, revision, onChanged, notify, onStartLesson 
         </div>
         {progress.total ? <Progress value={progress.percent / 100} /> : null}
         <div className="eg-muted" style={{ fontSize: 11.5 }}>
-          排序逻辑：先按资料里的章节顺序，再按"必须先学谁"，每个单元配一次讲解和一次练习，学完在 1、3、7 天后各复习一次。
+          排序逻辑：先按资料里的章节顺序，再按"必须先学谁"；每个单元配一次讲解、一次练习和三轮回看，一章做完自动进入下一章，不设每天时长。
         </div>
       </Section>
 
       {!plan ? (
         <Section>
-          <EmptyState title="还没排计划" text="排好之后，每天打开就能看到今天该学什么，不用自己想去哪一步。"
+          <EmptyState title="还没排计划" text="排好之后，打开就能看到下一章该学什么；一章做完自动进下一章。"
             action={<Button variant="primary" loading={generating} onClick={generate}>排计划</Button>} />
         </Section>
       ) : (
         <div className="eg-grid" style={{ gap: 14 }}>
-          {grouped.map(([date, tasks]) => (
-            <Section key={date} title={date === '未排期' ? '没排日期' : `${date} · ${tasks.length} 项`}>
+          {grouped.map((group) => (
+            <Section key={group.title + group.tasks[0]?.id} title={group.title} hint={`${group.tasks.length} 个任务`}>
               <div className="eg-list">
-                {tasks.map((task) => (
+                {group.tasks.map((task) => (
                   <div key={task.id} className="eg-list-row" style={{ cursor: 'default' }} data-active={task.status === 'doing'}>
                     <span className="eg-dot" data-tone={task.status === 'done' ? 'success' : TASK_TONE[task.type] ?? 'brand'} />
                     <span className="eg-list-main">

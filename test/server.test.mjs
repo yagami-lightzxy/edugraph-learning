@@ -153,7 +153,7 @@ describe('纯函数：分析 / 计划 / 题目 / 判分', () => {
     assert.equal(scoreToRating(0.1), 1)
   })
 
-  it('计划按天排布并保留已完成任务', () => {
+  it('计划按章节推进并保留已完成任务', () => {
     const meta = {
       course: { id: 'c1', name: '测试课', goal: '' },
       profile: { dailyMinutes: 45, examDate: '' },
@@ -170,6 +170,11 @@ describe('纯函数：分析 / 计划 / 题目 / 判分', () => {
     assert.ok(plan.tasks.length > 0)
     assert.ok(plan.tasks.some((t) => t.type === 'lesson'))
     assert.ok(plan.tasks.some((t) => t.type === 'review'))
+    assert.equal(plan.targetDate, '')
+    assert.ok(plan.tasks.every((t) => !t.dueDate), '章节计划不再按日期排')
+    assert.equal(plan.tasks[0].chapterId, 'ch1')
+    assert.equal(plan.tasks[0].chapterTitle, '第一章')
+    assert.ok(plan.tasks.some((t) => t.chapterId === 'ch2'))
     const progress = planProgress(plan)
     assert.equal(progress.done, 0)
     // 重新生成时继承完成状态

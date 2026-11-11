@@ -85,7 +85,7 @@ export function LessonView({ courseId, revision, onChanged, notify, onPractice }
           <div className="eg-muted">
             {lesson.chapterTitle ? `${lesson.chapterTitle} · ` : ''}
             {lesson.cards.length} 个知识点
-            {task ? ` · 计划 ${task.dueDate} · ${task.estimatedMinutes} 分钟` : ''}
+            {task ? ` · ${task.estimatedMinutes} 分钟` : ''}
           </div>
         </div>
         <div className="eg-row">

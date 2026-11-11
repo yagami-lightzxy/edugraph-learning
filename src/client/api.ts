@@ -26,12 +26,12 @@ export type SourceRef = { documentId: string; pageNo: number; blockId?: string; 
 export type Relation = { id: string; sourceId: string; targetId: string; type: string; weight: number }
 export type Task = {
   id: string; order: number; key?: string; type: string; title: string; conceptIds: string[]
-  chapterId: string | null; estimatedMinutes: number; dueDate: string; status: string
+  chapterId: string | null; chapterTitle?: string; estimatedMinutes: number; dueDate?: string; status: string
   completedAt?: string | null; startedAt?: string | null; note?: string; round?: number
 }
 export type Plan = {
   id: string; version: number; goal: string; status: string; startDate: string; targetDate: string
-  dailyMinutes: number; horizonDays: number; totalMinutes: number; tasks: Task[]
+  dailyMinutes?: number; horizonDays?: number; totalMinutes: number; tasks: Task[]
 }
 export type Question = {
   id: string; type: string; stem: string; options: string[]; conceptId: string
@@ -49,7 +49,7 @@ export type Overview = {
   weakConcepts: { id: string; name: string; mastery: number; level: string }[]
   dueReviews: { conceptId: string; name: string; due: number; mastery: number }[]
   planProgress: { total: number; done: number; remaining: number; dueToday: number; percent: number; minutesDone: number; minutesTotal: number }
-  nextTasks: { id: string; title: string; type: string; dueDate: string; estimatedMinutes: number; conceptIds: string[]; order: number }[]
+  nextTasks: { id: string; title: string; type: string; chapterTitle?: string; dueDate?: string; estimatedMinutes: number; conceptIds: string[]; order: number }[]
   today: { attempts: number; avgScore: number | null }
   events: { id: string; type: string; conceptId: string | null; conceptName: string; createdAt: string; evidence: any }[]
   updatedAt: string

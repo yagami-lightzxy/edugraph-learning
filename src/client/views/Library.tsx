@@ -12,7 +12,7 @@ export function LibraryView({ catalog, onOpen, onChanged, notify }: {
   const [creating, setCreating] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<CourseListItem | null>(null)
   const [busy, setBusy] = useState(false)
-  const [form, setForm] = useState({ name: '', subject: '', goal: '', examDate: '', dailyMinutes: 45 })
+  const [form, setForm] = useState({ name: '', subject: '', goal: '', examDate: '' })
 
   const create = async () => {
     if (!form.name.trim()) { notify('请填写课程名称'); return }
@@ -20,9 +20,8 @@ export function LibraryView({ catalog, onOpen, onChanged, notify }: {
     try {
       const created = await api.createCourse({ name: form.name.trim(), subject: form.subject.trim(), goal: form.goal.trim() })
       if (form.examDate) await api.updateCourse(created.course.id, { examDate: form.examDate })
-      if (Number(form.dailyMinutes)) await api.updateCourse(created.course.id, { dailyMinutes: Number(form.dailyMinutes) })
       setCreating(false)
-      setForm({ name: '', subject: '', goal: '', examDate: '', dailyMinutes: 45 })
+      setForm({ name: '', subject: '', goal: '', examDate: '' })
       notify('课程建好了，传资料就能开始')
       onChanged()
       onOpen(created.course.id)
@@ -172,10 +171,6 @@ export function LibraryView({ catalog, onOpen, onChanged, notify }: {
           <Field label="学习目标（可选）" hint="例如：两周内掌握二极管与三极管电路分析，能独立做题。">
             <textarea className="eg-textarea" style={{ minHeight: 64 }} value={form.goal}
               onChange={(event) => setForm({ ...form, goal: event.target.value })} />
-          </Field>
-          <Field label="每天可学习时间（分钟）">
-            <input className="eg-input" type="number" min={10} max={480} value={form.dailyMinutes}
-              onChange={(event) => setForm({ ...form, dailyMinutes: Number(event.target.value) })} />
           </Field>
         </Modal>
       ) : null}

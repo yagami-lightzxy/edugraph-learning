@@ -12,7 +12,7 @@ export function SettingsView({ courseId, revision, notify, onChanged, onDeleted 
 }) {
   const { data } = useResource(() => api.getCourse(courseId), [courseId, revision])
   const health = useResource(() => api.health(), [])
-  const [form, setForm] = useState({ name: '', subject: '', goal: '', level: 'unknown', dailyMinutes: 45, examDate: '', notes: '' })
+  const [form, setForm] = useState({ name: '', subject: '', goal: '', level: 'unknown', examDate: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -24,7 +24,6 @@ export function SettingsView({ courseId, revision, notify, onChanged, onDeleted 
       subject: data.course.subject ?? '',
       goal: data.profile?.goal ?? data.course.goal ?? '',
       level: data.profile?.level ?? 'unknown',
-      dailyMinutes: data.profile?.dailyMinutes ?? 45,
       examDate: data.profile?.examDate ?? '',
       notes: data.profile?.notes ?? '',
     })
@@ -35,7 +34,7 @@ export function SettingsView({ courseId, revision, notify, onChanged, onDeleted 
     try {
       await api.updateCourse(courseId, {
         name: form.name, subject: form.subject, goal: form.goal,
-        level: form.level, dailyMinutes: Number(form.dailyMinutes) || 45, examDate: form.examDate,
+        level: form.level, examDate: form.examDate,
         notes: form.notes,
       })
       notify('记下了')
@@ -80,12 +79,12 @@ export function SettingsView({ courseId, revision, notify, onChanged, onDeleted 
         </div>
       </Section>
 
-      <Section title="你的学习情况" hint="这些会影响讲解深度和计划节奏">
+      <Section title="你的学习情况" hint="这些会影响讲解深度和章节顺序">
         <Field label="学习目标">
           <textarea className="eg-textarea" style={{ minHeight: 64 }} value={form.goal}
             onChange={(event) => setForm({ ...form, goal: event.target.value })} />
         </Field>
-        <div className="eg-grid cols-3">
+        <div className="eg-grid cols-2">
           <Field label="基础水平">
             <select className="eg-select" value={form.level} onChange={(event) => setForm({ ...form, level: event.target.value })}>
               <option value="unknown">未说明</option>
@@ -94,11 +93,7 @@ export function SettingsView({ courseId, revision, notify, onChanged, onDeleted 
               <option value="advanced">较熟练</option>
             </select>
           </Field>
-          <Field label="每天学习分钟">
-            <input className="eg-input" type="number" min={10} max={480} value={form.dailyMinutes}
-              onChange={(event) => setForm({ ...form, dailyMinutes: Number(event.target.value) })} />
-          </Field>
-          <Field label="考试 / 截止日期">
+          <Field label="考试 / 截止日期（可选）">
             <input className="eg-input" type="date" value={form.examDate}
               onChange={(event) => setForm({ ...form, examDate: event.target.value })} />
           </Field>
